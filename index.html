@@ -1,0 +1,1059 @@
+<meta charset="utf-8">
+<title>RCM → 설계평가 템플릿 생성기</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  :root{
+    --paper:#EDF1F3; --panel:#FFFFFF; --ink:#12222B; --muted:#5E7480;
+    --rule:#D3DDE2; --rule-soft:#E6ECEF; --accent:#0E4C5C; --accent-soft:#E3EEF1;
+    --ok:#0F6B57; --ok-bg:#E4F1EC; --warn:#9A5B12; --warn-bg:#FBEEDD;
+    --bad:#9B2C2C; --bad-bg:#F8E5E5; --derive:#553C9A; --derive-bg:#EDE8F6;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.55}
+  .wrap{max-width:1280px;margin:0 auto;padding:26px 20px 90px}
+  header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;border-bottom:2px solid var(--ink);padding-bottom:12px;margin-bottom:20px;flex-wrap:wrap}
+  h1{font-size:20px;margin:0;letter-spacing:-.02em;font-weight:700}
+  .sub{color:var(--muted);font-size:12px;margin-top:4px}
+  .stage{font-family:var(--mono);font-size:11px;color:var(--accent);background:var(--accent-soft);border:1px solid #C4DBE1;padding:4px 9px;border-radius:2px;white-space:nowrap}
+  section.card{background:var(--panel);border:1px solid var(--rule);border-radius:3px;margin-bottom:16px}
+  .card>h2{font-size:12px;font-weight:700;letter-spacing:.06em;margin:0;padding:11px 16px;border-bottom:1px solid var(--rule-soft);color:var(--accent);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .card>h2 .note{font-weight:400;letter-spacing:0;text-transform:none;color:var(--muted);font-size:11.5px}
+  .body{padding:15px 16px}
+  .drop{border:1.5px dashed var(--rule);border-radius:3px;padding:26px 20px;text-align:center;background:#FAFCFD;cursor:pointer;transition:.15s}
+  .drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+  .drop strong{display:block;font-size:14px;margin-bottom:4px}
+  .drop span{color:var(--muted);font-size:12px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  label.f{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--muted)}
+  select,input[type=number],input[type=text],textarea{font-family:var(--sans);font-size:13px;padding:6px 8px;border:1px solid var(--rule);border-radius:2px;background:#fff;color:var(--ink)}
+  textarea{width:100%;resize:vertical;line-height:1.5}
+  select:focus,input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  button{font-family:var(--sans);font-size:12.5px;padding:7px 13px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:2px;cursor:pointer}
+  button.ghost{background:#fff;color:var(--accent)}
+  button.tiny{padding:2px 7px;font-size:11px}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{border-bottom:1px solid var(--rule-soft);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#F6F9FA;font-weight:600;font-size:11.5px;color:var(--muted);white-space:nowrap}
+  .col-chip{font-family:var(--mono);font-size:11px;background:#F0F4F6;border:1px solid var(--rule);padding:1px 5px;border-radius:2px;color:var(--accent)}
+  .badge{font-size:10.5px;font-family:var(--mono);padding:2px 6px;border-radius:2px;white-space:nowrap}
+  .b-ok{background:var(--ok-bg);color:var(--ok)}
+  .b-warn{background:var(--warn-bg);color:var(--warn)}
+  .b-bad{background:var(--bad-bg);color:var(--bad)}
+  .b-derive{background:var(--derive-bg);color:var(--derive)}
+  .req{color:var(--bad);font-weight:700}
+  .samp{color:var(--muted);font-size:11.5px;font-family:var(--mono);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hidden{display:none}
+  .fieldname{font-weight:600}
+  .fieldname small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+  .grp{font-size:11px;letter-spacing:.06em;color:var(--muted);background:#F6F9FA;padding:6px 9px;font-weight:600}
+  .msg{padding:10px 12px;border-radius:2px;font-size:12.5px}
+  .msg.err{background:var(--bad-bg);color:var(--bad)}
+  .msg.info{background:var(--accent-soft);color:var(--accent)}
+  .msg.ok{background:var(--ok-bg);color:var(--ok)}
+  .hdrmap{font-size:11.5px;color:var(--muted);margin-top:8px}
+  .flexspace{flex:1}
+  .tmpl{margin-bottom:12px}
+  .tmpl label{display:block;font-size:11.5px;color:var(--accent);font-weight:600;margin-bottom:3px}
+  .tokens{font-family:var(--mono);font-size:11px;color:var(--muted);background:#F6F9FA;border:1px solid var(--rule-soft);padding:8px 10px;border-radius:2px;margin-bottom:14px;line-height:1.8}
+  .tokens b{color:var(--accent);font-weight:600}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;padding:10px 16px 0}
+  .tab{padding:7px 14px;border:1px solid var(--rule);border-bottom:none;background:#F3F7F8;color:var(--muted);cursor:pointer;font-size:12.5px;border-radius:3px 3px 0 0}
+  .tab.on{background:#fff;color:var(--accent);font-weight:700;border-color:var(--accent);border-bottom:2px solid #fff;margin-bottom:-1px}
+  tr.ctrl{cursor:pointer}
+  tr.ctrl:hover{background:#F9FCFD}
+  .filelist{display:flex;flex-direction:column;gap:8px}
+  .filerow{display:flex;align-items:center;gap:12px;border:1px solid var(--rule-soft);padding:9px 12px;border-radius:2px;background:#FAFCFD}
+  .filerow strong{font-family:var(--mono);font-size:12.5px}
+  .filerow span{color:var(--muted);font-size:12px}
+  /* 시트 뷰 : 엑셀 출력과 동일한 배치 */
+  .sheetbar{display:flex;gap:10px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--rule-soft);background:#F6F9FA;flex-wrap:wrap}
+  .sheetbar .code{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)}
+  .svscroll{overflow-x:auto}
+  table.sv{border-collapse:collapse;width:100%;table-layout:fixed;min-width:900px}
+  table.sv td{border:1px solid #C8D2D8;padding:0;vertical-align:top}
+  table.sv td.rn{width:34px;background:#F1F5F6;color:#8AA0AA;font-family:var(--mono);font-size:11px;text-align:center;padding:6px 0}
+  table.sv td.lb{width:210px;background:#EDF2F4;font-size:12px;font-weight:600;padding:7px 9px;color:#274753}
+  table.sv td.lb2{width:230px;background:#F4F8F9;font-size:12px;padding:7px 9px;color:#33586A}
+  table.sv td.vl{padding:0}
+  table.sv td.vl textarea,table.sv td.vl select{border:none;border-radius:0;background:transparent;padding:7px 9px;font-size:12.5px;display:block;width:100%}
+  table.sv td.vl textarea{min-height:32px}
+  table.sv td.vl textarea:focus,table.sv td.vl select:focus{background:#FFFDF3}
+  table.sv td.vl textarea[readonly]{color:#40606C;background:#F7FAFB}
+  table.sv td.note{background:#FBFCFD;font-size:12px;font-style:italic;color:#48626D;padding:7px 9px}
+  table.sv td.ev{background:#EDF2F4;font-size:12px;font-weight:700;padding:7px 9px;color:#274753}
+  table.sv td.evcap{padding:0;background:#fff}
+  table.sv td.evcap textarea{border:none;background:#F4F8F9;padding:9px;font-size:12.5px;width:100%;min-height:44px;line-height:1.6}
+  table.sv td.evimg{padding:6px 9px;background:#fff}
+  table.sv td.evimg img{display:block;border:1px solid var(--rule-soft);max-width:100%}
+  table.sv td.spacer{height:8px;background:#FBFCFD}
+  .evtools{display:flex;gap:6px;align-items:center;padding:4px 9px;background:#F4F8F9;border-bottom:1px solid var(--rule-soft);font-size:11px;color:var(--muted);flex-wrap:wrap}
+  .evtools .n{font-family:var(--mono);color:var(--accent);font-weight:700}
+  .evtools input[type=range]{width:150px}
+  .evadd{display:flex;gap:8px;align-items:center;padding:12px 16px;flex-wrap:wrap}
+  .evdrop{flex:1;min-width:280px;border:1.5px dashed var(--rule);border-radius:3px;padding:12px;text-align:center;background:#FAFCFD;color:var(--muted);font-size:12.5px;cursor:pointer}
+  .evdrop:hover,.evdrop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div>
+    <h1>RCM → 설계평가 템플릿 생성기</h1>
+    <div class="sub">RCM 열을 자동 인식하고, 프로세스별 설계평가 파일(RCM + 설계평가 + 통제별 시트 + 증빙)을 만듭니다.</div>
+  </div>
+  <div class="stage">v0.4</div>
+</header>
+
+<section class="card">
+  <h2>1. RCM 파일<span class="note">브라우저 안에서만 처리되고 어디에도 전송되지 않습니다</span></h2>
+  <div class="body">
+    <div id="drop" class="drop">
+      <strong>파일을 끌어놓거나 클릭해 선택</strong><span>.xlsx · .xls · .xlsm</span>
+    </div>
+    <input type="file" id="file" accept=".xlsx,.xls,.xlsm" class="hidden">
+    <div id="loadmsg" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="ghost" id="saveProj">작성중인 내용 저장</button>
+      <button class="ghost" id="loadProjBtn">저장한 작업 불러오기</button>
+      <input type="file" id="loadProj" accept=".json" class="hidden">
+      <span class="samp" style="max-width:none">증빙 캡쳐까지 함께 저장됩니다. 브라우저를 닫기 전에 저장하세요.</span>
+    </div>
+  </div>
+</section>
+
+<section class="card hidden" id="sheetcard">
+  <h2>2. 시트와 행 범위</h2>
+  <div class="body">
+    <div class="row">
+      <label class="f">시트<select id="sheet"></select></label>
+      <label class="f">헤더 행<input type="number" id="hdrRow" min="1" style="width:80px"></label>
+      <label class="f">데이터 시작<input type="number" id="dataRow" min="1" style="width:90px"></label>
+      <label class="f">데이터 끝<input type="number" id="endRow" min="1" style="width:90px"></label>
+      <div class="flexspace"></div>
+      <button class="ghost" id="redetect">자동 인식 다시 실행</button>
+    </div>
+    <div class="hdrmap" id="rangeinfo"></div>
+  </div>
+</section>
+
+<section class="card hidden" id="mapcard">
+  <h2>3. 항목 매핑<span class="note">라벨은 생성될 시트에 그대로 쓰입니다</span></h2>
+  <table>
+    <thead><tr><th style="width:180px">설계평가 항목</th><th style="width:290px">RCM 열</th><th style="width:200px">시트 표기 라벨</th><th style="width:84px">인식</th><th>첫 행 값</th></tr></thead>
+    <tbody id="maprows"></tbody>
+  </table>
+  <div class="body row">
+    <button id="build">설계평가 생성</button>
+    <button class="ghost" id="merge" disabled>RCM 반영 (작성내용 유지)</button>
+    <div class="flexspace"></div>
+    <button class="ghost" id="saveMap">매핑 규칙 저장</button>
+    <button class="ghost" id="loadMapBtn">매핑 규칙 불러오기</button>
+    <input type="file" id="loadMap" accept=".json" class="hidden">
+  </div>
+  <div class="body" id="buildmsg" style="padding-top:0"></div>
+</section>
+
+<section class="card hidden" id="tmplcard">
+  <h2>4. 문구 · 선택항목 설정<span class="note">고치면 &lt;문구 다시 생성&gt;을 눌러 반영</span></h2>
+  <div class="body">
+    <div class="tokens" id="tokenhelp"></div>
+    <div id="tmplfields"></div>
+    <div class="row" style="margin-bottom:14px">
+      <button class="ghost" id="regen">문구 다시 생성</button>
+      <span class="samp" style="max-width:none">직접 고친 칸은 다시 생성해도 유지됩니다.</span>
+    </div>
+    <div class="row" style="align-items:flex-start">
+      <div style="flex:1;min-width:280px"><div class="tmpl"><label>설계평가 진행현황 선택목록 (한 줄에 하나)</label>
+        <textarea rows="5" id="optProg"></textarea></div></div>
+      <div style="flex:1;min-width:280px"><div class="tmpl"><label>설계평가 결론 선택목록 (한 줄에 하나)</label>
+        <textarea rows="5" id="optConc"></textarea></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="card hidden" id="evalcard">
+  <h2>5. 설계평가 목록<span class="note">행을 누르면 아래에 해당 통제 시트가 열립니다</span></h2>
+  <div class="tabs" id="proctabs"></div>
+  <div style="overflow-x:auto;border-top:1px solid var(--rule)">
+    <table><thead><tr id="idxhead"></tr></thead><tbody id="idxrows"></tbody></table>
+  </div>
+</section>
+
+<section class="card hidden" id="sheetview">
+  <h2>6. 통제 시트<span class="note">행 번호·배치가 내보낼 엑셀과 같습니다</span></h2>
+  <div class="sheetbar">
+    <button class="ghost" id="prevCtrl">◀ 이전</button>
+    <span class="code" id="svcode"></span>
+    <span class="samp" id="svname" style="max-width:380px"></span>
+    <div class="flexspace"></div>
+    <label class="f" style="flex-direction:row;align-items:center;gap:6px">진행현황<select id="svprog" style="width:210px"></select></label>
+    <button class="ghost" id="nextCtrl">다음 ▶</button>
+  </div>
+  <div class="svscroll" id="svbody"></div>
+  <div class="evadd">
+    <div class="evdrop" id="evdrop">캡쳐 이미지를 끌어놓거나 클릭해 선택 · 이 화면에서 <b>Ctrl+V</b> 붙여넣기</div>
+    <input type="file" id="evfile" accept="image/*" multiple class="hidden">
+    <button class="ghost" id="addText">텍스트 행 추가</button>
+  </div>
+</section>
+
+<section class="card hidden" id="expcard">
+  <h2>7. 엑셀 내보내기<span class="note">프로세스 코드별로 파일이 하나씩 만들어집니다</span></h2>
+  <div class="body">
+    <div class="filelist" id="filelist"></div>
+    <div class="row" style="margin-top:14px">
+      <label class="f">RCM 값 연결 방식
+        <select id="fxmode" style="width:330px">
+          <option value="lookup">통제번호로 조회 — INDEX/MATCH (권장)</option>
+          <option value="direct">셀 직접참조 — RCM!$M$7</option>
+          <option value="value">수식 없이 값으로만</option>
+        </select></label>
+      <div class="flexspace"></div>
+      <button id="expAll">전체 내보내기</button><div id="expmsg"></div>
+    </div>
+    <div class="samp" style="max-width:none;margin-top:8px" id="fxhelp"></div>
+  </div>
+</section>
+</div>
+
+<script>
+/* ══════════ 필드 정의 ══════════ */
+const FIELDS = [
+ {g:'필수', key:'processCode', label:'프로세스 코드', hint:'파일 분리 기준 · 시트 최상단',
+  pos:[[/프로세스(번호|코드|no|code|id)/,12],[/process(no|code|id)/,9],[/^프로세스$/,4]],
+  neg:[[/하위|sub/,7],[/명칭|이름|name|설명/,14]],
+  val:v=>/^[A-Za-z가-힣]{1,12}[0-9]{0,3}$/.test(v)?3:0},
+ {g:'필수', key:'controlCode', label:'통제활동 코드', hint:'시트명 · Link 기준',
+  pos:[[/통제(활동)?(번호|코드|no|code|id)/,14],[/control(activity)?(no|code|id)/,10]],
+  neg:[[/명칭|이름|name|설명|기술|목적|description/,14],[/리스크|risk|wcgw/,9]],
+  val:v=>/[A-Za-z]/.test(v)&&/[0-9]/.test(v)&&v.length<=30?3:0},
+ {g:'필수', key:'controlName', label:'통제활동명',
+  pos:[[/통제(활동)?(명칭|명$|이름|name)/,14],[/control(activity)?name/,10]],
+  neg:[[/번호|코드|no$|code|id$/,14],[/설명|기술|description|목적/,11]],
+  val:v=>v.length>=4&&v.length<=60?2:0},
+ {g:'필수', key:'keyControl', label:'핵심통제 여부',
+  pos:[[/핵심통제/,14],[/key.?control/,11],[/주요통제/,7]],
+  neg:[[/근거|비핵심|non.?key|reason|사유/,16]],
+  val:v=>/^(y|n|yes|no|예|아니오|key|nonkey|non-key|비핵심|핵심)$/i.test(v)?4:0},
+ {g:'필수', key:'frequency', label:'통제주기',
+  pos:[[/통제주기/,16],[/주기|빈도|frequency/,9],[/일별.*월별|월별.*분기별/,12]],
+  neg:[[/수행빈도.*low|리스크/,10]],
+  val:v=>/일별|주별|월별|분기|반기|연간|연별|건별|상시|daily|monthly|quarterly|annual|event/i.test(v)?5:0},
+ {g:'필수', key:'controlRisk', label:'최종 통제위험', hint:'예: RoMM 평가',
+  pos:[[/romm/,16],[/통제위험/,10],[/최종.?(통제)?위험/,10],[/control.?risk/,9],[/평가|레벨|rating|level/,2]],
+  neg:[[/고유|inherent|wcgw|발생가능성|영향도|likelihood|impact/,16],[/사유|근거/,8]],
+  val:v=>/^(h|m|l|high|medium|low|상|중|하)$/i.test(v)?4:0},
+ {g:'필수', key:'controlType', label:'통제유형(예방/적발)',
+  pos:[[/예방.?적발/,16],[/preventive|detective/,11],[/통제유형|control.?type/,7]],
+  neg:[[/자동|수동|manual|automat/,14],[/목적|분류|구분/,7]],
+  val:v=>/예방|적발|prevent|detect/i.test(v)?5:0},
+ {g:'필수', key:'riskName', label:'통제위험 내용', hint:'예: RISK(WCGW)명칭 · 속성2 문구에 사용',
+  pos:[[/risk.*명칭|리스크명칭|위험명칭|위험기술|리스크기술|wcgw명/,15],[/(리스크|위험|risk).*(내용|설명|명)/,10]],
+  neg:[[/번호|no$|코드|code/,14],[/레벨|level|평가|발생가능성|영향도|rating/,13]],
+  val:v=>v.length>15?4:0},
+ {g:'필수', key:'controlDesc', label:'통제활동 기술',
+  pos:[[/통제활동(설명|기술|내용)/,16],[/통제(설명|기술서)/,12],[/when.*who.*what/,10],[/control.?description/,9]],
+  neg:[[/명칭|번호|코드|목적/,14]], val:v=>v.length>60?4:0},
+ {g:'필수', key:'testProc', label:'통제 테스트 절차',
+  pos:[[/테스트절차/,16],[/test.?procedure/,11],[/(수행|평가)절차/,7]],
+  neg:[[/결과|result/,12],[/방법|샘플|sample|질문|관찰|재수행/,7]], val:v=>v.length>60?4:0},
+ {g:'필수', key:'controlDept', label:'통제부서',
+  pos:[[/통제수행조직/,16],[/(통제|수행|담당)(부서|조직|팀)/,12],[/department|owner.?dept/,8]],
+  neg:[[/담당자|책임자|성명|person|수행자/,14]], val:v=>v.length<=30?2:0},
+ {g:'필수', key:'controlOwner', label:'통제책임자',
+  pos:[[/통제수행담당자/,16],[/통제(책임자|담당자)/,14],[/(담당자|책임자|수행자)/,8],[/control.?owner/,9]],
+  neg:[[/부서|조직|팀명/,10]], val:v=>v.length<=30?2:0},
+ {g:'필수', key:'population', label:'모집단',
+  pos:[[/^모집단$/,16],[/모집단(정의)?/,11],[/population/,9]],
+  neg:[[/완전성|completeness/,16],[/샘플|sample/,9]], val:v=>v.length<=80?2:0},
+ {g:'필수', key:'popComplete', label:'모집단 완전성 확인', derive:'testProc',
+  hint:'전용 열이 없으면 테스트 절차의 [1] 항목에서 추출',
+  pos:[[/모집단완전성/,18],[/완전성(확인|검증|절차)/,14],[/completeness/,8]],
+  neg:[[/경영자주장|assertion|실재성|권리와의무|발생사실|표시와공시|측정/,20],[/샘플|sample/,8]],
+  val:v=>v.length>10?2:0, defLabel:'모집단 완전성 확인 절차'},
+ {g:'필수', key:'relatedDoc', label:'관련문서(증빙)',
+  pos:[[/관련(문서|증빙|서류|자료)/,16],[/증빙(명|자료)?/,10],[/evidence|related.?doc/,9]],
+  neg:[[/ipe/,18],[/해당여부|번호|no$/,8]], val:v=>v.length<=120?2:0},
+ {g:'참고', key:'processName', label:'프로세스명', opt:true, hint:'파일명에만 사용',
+  pos:[[/프로세스(명|이름|name)/,14]],
+  neg:[[/하위|sub/,8],[/번호|코드|code|no$/,14]], val:v=>v.length<=30?2:0},
+ {g:'참고', key:'subProcess', label:'하위 프로세스 코드', opt:true,
+  pos:[[/하위프로세스(번호|코드|no|code)/,14],[/sub.?process(no|code)/,10]],
+  neg:[[/명칭|이름|name/,14]], val:v=>/^[A-Za-z가-힣]{1,12}[0-9]{1,3}$/.test(v)?3:0},
+];
+const RCM_KEYS=FIELDS.map(f=>f.key);
+
+/* ══════════ 문구 · 선택목록 ══════════ */
+const DEF_TMPL = {
+  detail:"{통제책임자|로}부터 입수한 Template 하단 첨부증빙을 통해 통제가 아래와 같이 설계되어 있음을 확인함.\n{통제활동기술}",
+  a1:"{통제활동명|은} 통제를 수행하는 절차에 대한 규정에 따라 수행되도록 설계되었으며, 이에 따라 일관성 있는 통제활동을 수행할 수 있다고 판단됨.",
+  a2:"{통제위험내용}에 대해서 검토 및 승인하는 예방통제를 수행하고 있으므로, 관련 위험이 충분히 경감되도록 통제활동이 설계되어 있다고 판단됨.",
+  a3:"예외사항이 발생하는 경우 조치가 완료된 후에 통제활동이 완료되므로 예외사항에 대한 적시 대응방안이 포함되었다고 판단함.",
+  a4:"{통제활동명|은} {통제유형|로} 건별 수행되고 있음. 동 통제의 발생빈도와 통제목적을 고려했을 때 적절하게 설계되어 있다고 판단됨.",
+  a5:"통제활동 수행자는 해당 업무의 일정 기간 이상의 경험을 통하여 숙련된 인원이므로 통제 수행자의 적격성이 존재한다고 판단됨."
+};
+const TMPL_META=[
+  ['detail','설계평가 상세내역',''],
+  ['a1','속성 1. 통제의 일관성 여부',''],
+  ['a2','속성 2. Risk 를 실질적으로 감소시키도록 통제가 설계되었는지 여부',
+   "지침대로 '예방통제'가 고정되어 있습니다. 적발통제까지 자동 반영하려면 → {통제유형}"],
+  ['a3','속성 3. 예외사항의 정의와 적시 대응 방안이 포함되는지 여부',''],
+  ['a4','속성 4. 통제의 적용 기간 및 통제 수행 빈도가 적절한지 여부',
+   "지침대로 '건별'이 고정되어 있습니다. 통제별 주기를 반영하려면 → {통제주기}"],
+  ['a5','속성 5. 통제책임자의 적격성 여부','']
+];
+const ATTR_LABEL=['1. 통제의 일관성 여부','2. Risk 를 실질적으로 감소시키도록 통제가 설계되었는지 여부',
+  '3. 예외사항의 정의와 적시 대응 방안이 포함되는지 여부','4. 통제의 적용 기간 및 통제 수행 빈도가 적절한지 여부',
+  '5. 통제책임자의 적격성 여부'];
+let OPT_PROG=['(0) 인터뷰 미수행','(1) Pending(자료미입수)','(2) Pending(자료입수)','(3) 수행완료','(4) 운영평가 시 테스트 예정'];
+let OPT_CONC=['Effective','Ineffective','Pending'];
+const DEF_PROGRESS='(1) Pending(자료미입수)', DEF_CONCL='Pending';
+const MAX_IMG_W=760;
+let FX_MODE='lookup';
+const XL_MAX_ROW_PT=380;                     // 엑셀 행 높이 한계(409pt) 안쪽
+const COLPX=[202,236,635];                   // B·C·D 열 픽셀폭 (아래 열너비와 짝)
+function colFrac(W){                          // 가로 W px 가 끝나는 열 위치(소수 허용)
+  let acc=0,i=1;
+  for(const w of COLPX){ if(W<=acc+w) return i+(W-acc)/w; acc+=w; i++ }
+  return i+(W-acc)/64;
+}
+const CAP_COLS=140;                           // B:D 병합폭에 들어가는 대략 글자수(한글=2)
+function capLines(t){
+  return String(t||'').split('\n').reduce((n,l)=>{
+    let u=0; for(const ch of l) u+=(ch.charCodeAt(0)>0x1100?2:1);
+    return n+Math.max(1,Math.ceil(u/CAP_COLS));
+  },0);
+}
+const capHeight=t=>Math.max(32,Math.min(300,10+17*capLines(t)));
+function imgBox(it){                          // 출력 크기와 차지하는 행 수
+  const sc=(it.scale||100)/100;
+  const w=Math.round(it.w*sc), h=Math.round(it.h*sc);
+  const pt=h*0.75;
+  const rows=Math.max(1,Math.ceil(pt/XL_MAX_ROW_PT));
+  return {w,h,pt,rows};
+}
+
+let TMPL=Object.assign({},DEF_TMPL);
+let WB=null,GRID=[],FILLED=[],MERGES=[],NCOL=0,HDR=0,DSTART=0,DEND=0,MAP={},LABEL={},PROCS=[],CURPROC=null,SEL=0;
+
+/* ══════════ 유틸 ══════════ */
+const colName=i=>{let s='',n=i;while(n>=0){s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)-1}return s};
+const norm=t=>String(t==null?'':t).toLowerCase().replace(/\s+/g,'').replace(/[·、,，]/g,'');
+const clean=t=>String(t==null?'':t).replace(/\r/g,'').trim();
+const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const p2=n=>String(n).padStart(2,'0');
+function ymd(v){
+  if(v instanceof Date&&!isNaN(v)) return v.getFullYear()+'-'+p2(v.getMonth()+1)+'-'+p2(v.getDate());
+  const s=String(v==null?'':v).trim();
+  let m=/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})(?:[ T].*)?$/.exec(s);
+  if(m) return m[1]+'-'+p2(m[2])+'-'+p2(m[3]);
+  m=/^(\d{1,2})[-.\/](\d{1,2})[-.\/](\d{2,4})$/.exec(s);
+  if(m){let y=+m[3];if(y<100)y+=2000;return y+'-'+p2(m[1])+'-'+p2(m[2])}
+  return null;
+}
+function josa(w,type){
+  const s=String(w||'').trim().replace(/[)\]\s.·]+$/,'');
+  const ch=s.charCodeAt(s.length-1); let j=null;
+  if(ch>=0xAC00&&ch<=0xD7A3) j=(ch-0xAC00)%28;
+  if(type==='은') return j===null?'은':(j>0?'은':'는');
+  if(type==='로') return j===null?'으로':((j===0||j===8)?'로':'으로');
+  if(type==='이') return j===null?'이':(j>0?'이':'가');
+  if(type==='을') return j===null?'을':(j>0?'을':'를');
+  return '';
+}
+function fill(t,v){
+  return String(t||'').replace(/\{([^}|]+)(?:\|([^}]+))?\}/g,(m,k,p)=>{
+    const val=v[k.trim()]!==undefined?String(v[k.trim()]):'';
+    return p?val+josa(val,p.trim()):val;
+  });
+}
+const shortType=v=>/적발|detect/i.test(v)?'적발통제':(/예방|prevent/i.test(v)?'예방통제':clean(v));
+const shortFreq=v=>{const m=clean(v).match(/^[^(（]+/);return m?m[0].trim():clean(v)};
+function dl(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)}
+function selHTML(opts,val,attrs){
+  const list=opts.slice(); if(val&&!list.includes(val))list.unshift(val);
+  return '<select '+(attrs||'')+'>'+list.map(o=>'<option'+(o===val?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>';
+}
+
+/* ══════════ 파일 읽기 ══════════ */
+const drop=document.getElementById('drop'),fileEl=document.getElementById('file');
+drop.onclick=()=>fileEl.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')};
+drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files[0])readFile(e.dataTransfer.files[0])};
+fileEl.onchange=e=>{if(e.target.files[0])readFile(e.target.files[0])};
+function readFile(f){
+  const msg=document.getElementById('loadmsg');
+  msg.innerHTML='<div class="msg info">읽는 중…</div>';
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      WB=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+      msg.innerHTML='<div class="msg info">'+esc(f.name)+' · 시트 '+WB.SheetNames.length+'개'+
+        (PROCS.length?' · 작성중인 내용이 있습니다. 매핑 확인 후 <b>RCM 반영</b>을 누르면 증빙과 수정문구가 유지됩니다.':'')+'</div>';
+      const sel=document.getElementById('sheet');sel.innerHTML='';
+      WB.SheetNames.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o)});
+      sel.value=WB.SheetNames.find(n=>/rcm|통제|control/i.test(n))||WB.SheetNames[0];
+      document.getElementById('sheetcard').classList.remove('hidden');
+      loadSheet();
+    }catch(err){msg.innerHTML='<div class="msg err">파일을 열지 못했습니다: '+esc(err.message)+'</div>'}
+  };
+  r.readAsArrayBuffer(f);
+}
+function loadSheet(){
+  const ws=WB.Sheets[document.getElementById('sheet').value];
+  GRID=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:null,blankrows:true});
+  NCOL=GRID.reduce((m,r)=>Math.max(m,r.length),0);
+  GRID=GRID.map(r=>{const a=r.slice();while(a.length<NCOL)a.push(null);return a});
+  FILLED=GRID.map(r=>r.slice());
+  MERGES=(ws['!merges']||[]).map(m=>({s:{r:m.s.r,c:m.s.c},e:{r:m.e.r,c:m.e.c}}));
+  MERGES.forEach(m=>{const v=(GRID[m.s.r]||[])[m.s.c];
+    for(let r=m.s.r;r<=m.e.r;r++)for(let c=m.s.c;c<=m.e.c;c++){if(FILLED[r])FILLED[r][c]=v}});
+  autoDetectRows(); syncRowInputs(); LABEL={}; buildMapping(true);
+  document.getElementById('merge').disabled=!PROCS.length;
+}
+document.getElementById('sheet').onchange=loadSheet;
+document.getElementById('redetect').onclick=()=>{autoDetectRows();syncRowInputs();LABEL={};buildMapping(true)};
+
+/* ══════════ 행/열 인식 ══════════ */
+function headerScore(r){
+  let s=0,f=0;
+  for(let c=0;c<NCOL;c++){const t=norm(FILLED[r][c]);if(!t)continue;f++;
+    FIELDS.forEach(fd=>fd.pos.forEach(([re,w])=>{if(re.test(t))s+=Math.min(w,10)/2}))}
+  return f<3?0:s+f*0.15;
+}
+function autoDetectRows(){
+  const sc=[];let bs=-1;
+  for(let r=0;r<Math.min(GRID.length,25);r++){const s=headerScore(r);sc.push(s);if(s>bs)bs=s}
+  HDR=sc.findIndex(s=>s>=bs*0.93); if(HDR<0)HDR=0;
+  DSTART=HDR+1; DEND=Math.min(GRID.length-1,HDR+30);
+  buildMapping(true,true);
+  const cols=FIELDS.map(f=>MAP[f.key]).filter(v=>v!=null);
+  DSTART=HDR+1;
+  for(let r=HDR+1;r<Math.min(GRID.length,HDR+40);r++){
+    const hit=cols.filter(c=>clean(GRID[r][c])!=='').length;
+    if(cols.length&&hit>=Math.max(3,cols.length*0.5)){DSTART=r;break}
+  }
+  const key=MAP.controlCode!=null?MAP.controlCode:cols[0];
+  DEND=DSTART;
+  for(let r=DSTART;r<GRID.length;r++) if(clean(GRID[r][key])!=='')DEND=r;
+}
+function syncRowInputs(){
+  hdrRow.value=HDR+1; dataRow.value=DSTART+1; endRow.value=DEND+1;
+  document.getElementById('rangeinfo').textContent=
+    '헤더 '+(HDR+1)+'행 · 데이터 '+(DSTART+1)+'~'+(DEND+1)+'행 · 통제활동 '+(DEND-DSTART+1)+'건 · 전체 '+NCOL+'열';
+}
+['hdrRow','dataRow','endRow'].forEach(id=>document.getElementById(id).onchange=()=>{
+  HDR=+hdrRow.value-1;DSTART=+dataRow.value-1;DEND=+endRow.value-1;syncRowInputs();LABEL={};buildMapping(true)});
+function headText(c){
+  const leaf=clean(FILLED[HDR]?FILLED[HDR][c]:'');
+  const p1=HDR>0?clean(FILLED[HDR-1][c]):'',p2v=HDR>1?clean(FILLED[HDR-2][c]):'';
+  return {leaf,parents:[p1,p2v].filter(x=>x&&x!==leaf)};
+}
+function colLabel(c){const h=headText(c);return colName(c)+' · '+(h.leaf.replace(/\n/g,' ')||'(빈 제목)')+(h.parents.length?' ‹'+h.parents.join(' / ')+'›':'')}
+function autoLabel(f){
+  const c=MAP[f.key];
+  if(c==null) return f.defLabel||f.label;
+  const h=headText(c),leaf=h.leaf.replace(/\n/g,' ').trim();
+  if(!leaf||/^[(（]/.test(leaf)) return (h.parents[0]||leaf||f.label).replace(/\n/g,' ');
+  return leaf;
+}
+const labelOf=f=>LABEL[f.key]!==undefined?LABEL[f.key]:autoLabel(f);
+const L=k=>labelOf(FIELDS.find(f=>f.key===k));
+function sampleVals(c,n){const o=[];for(let r=DSTART;r<=DEND&&o.length<n;r++){const v=clean(GRID[r][c]);if(v)o.push(v)}return o}
+function scoreField(f,c){
+  const h=headText(c),leaf=norm(h.leaf),par=norm(h.parents.join(''));
+  if(!leaf&&!par)return -99;
+  let s=0;
+  f.pos.forEach(([re,w])=>{if(re.test(leaf))s+=w;else if(re.test(par))s+=w*0.45});
+  f.neg.forEach(([re,w])=>{if(re.test(leaf))s-=w;else if(re.test(par))s-=w*0.35});
+  if(s<=0)return s;
+  if(f.val){const sv=sampleVals(c,12);if(sv.length){let v=0;sv.forEach(x=>v+=f.val(x));s+=v/sv.length}else s-=3}
+  return s;
+}
+function buildMapping(reset,quiet){
+  if(reset){
+    const pairs=[];
+    FIELDS.forEach(f=>{for(let c=0;c<NCOL;c++){const s=scoreField(f,c);if(s>=6)pairs.push({f:f.key,c,s})}});
+    pairs.sort((a,b)=>b.s-a.s);
+    MAP={};const used=new Set(),done=new Set();
+    pairs.forEach(p=>{if(done.has(p.f)||used.has(p.c))return;MAP[p.f]=p.c;used.add(p.c);done.add(p.f);MAP['_s_'+p.f]=p.s});
+    FIELDS.forEach(f=>{if(MAP[f.key]==null)MAP[f.key]=null});
+  }
+  if(quiet)return;
+  renderMap();
+}
+function renderMap(){
+  const tb=document.getElementById('maprows');tb.innerHTML='';let g='';
+  FIELDS.forEach(f=>{
+    if(f.g!==g){g=f.g;const t=document.createElement('tr');
+      t.innerHTML='<td colspan="5" class="grp">'+(g==='필수'?'설계평가 필수 항목':'참고 항목')+'</td>';tb.appendChild(t)}
+    const c=MAP[f.key],sc=MAP['_s_'+f.key]||0;
+    let badge;
+    if(c==null&&f.derive)badge='<span class="badge b-derive">절차에서 추출</span>';
+    else if(c==null)badge='<span class="badge '+(f.opt?'b-warn':'b-bad')+'">'+(f.opt?'없음':'미인식')+'</span>';
+    else if(sc>=14)badge='<span class="badge b-ok">확실</span>';
+    else if(sc>=9)badge='<span class="badge b-ok">양호</span>';
+    else badge='<span class="badge b-warn">확인 필요</span>';
+    let opts='<option value="">— 선택 안 함'+(f.derive?' (절차에서 추출)':'')+'</option>';
+    for(let i=0;i<NCOL;i++){const h=headText(i);if(!h.leaf&&!h.parents.length&&!sampleVals(i,1).length)continue;
+      opts+='<option value="'+i+'"'+(c===i?' selected':'')+'>'+esc(colLabel(i))+'</option>'}
+    const sample=c==null?(f.derive&&MAP.testProc!=null?extractCompleteness(clean(GRID[DSTART][MAP.testProc])):''):(sampleVals(c,1)[0]||'');
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td class="fieldname">'+esc(f.label)+(f.opt?'':' <span class="req">*</span>')+
+      (f.hint?'<small>'+esc(f.hint)+'</small>':'')+'</td>'+
+      '<td><select data-f="'+f.key+'" style="width:100%">'+opts+'</select></td>'+
+      '<td><input type="text" data-l="'+f.key+'" style="width:100%" value="'+esc(labelOf(f))+'"></td>'+
+      '<td>'+badge+'</td>'+
+      '<td class="samp" title="'+esc(sample)+'">'+esc(sample.replace(/\n/g,' ⏎ ').slice(0,140))+'</td>';
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('select[data-f]').forEach(s=>s.onchange=e=>{
+    const k=e.target.dataset.f;MAP[k]=e.target.value===''?null:+e.target.value;MAP['_s_'+k]=e.target.value===''?0:99;
+    delete LABEL[k];renderMap()});
+  tb.querySelectorAll('input[data-l]').forEach(s=>s.onchange=e=>{LABEL[e.target.dataset.l]=e.target.value});
+  document.getElementById('mapcard').classList.remove('hidden');
+}
+function extractCompleteness(text){
+  if(!text)return '';
+  const lines=String(text).split(/\r?\n/);
+  const br=/^\s*\[\s*\d+\s*\]/,nu=/^\s*(\(\s*\d+\s*\)|[①②③④⑤⑥⑦⑧⑨⑩]|\d+\s*[.)]\s*\S)/;
+  const useB=lines.some(l=>br.test(l)),isH=l=>useB?br.test(l):nu.test(l);
+  const heads=[];lines.forEach((l,i)=>{if(isH(l))heads.push(i)});
+  if(!heads.length)return /완전성/.test(text)?String(text).trim():'';
+  for(let k=0;k<heads.length;k++){const s=heads[k],e=k+1<heads.length?heads[k+1]:lines.length;
+    if(/완전성|completeness/i.test(lines[s]))return lines.slice(s,e).join('\n').trim()}
+  return lines.slice(heads[0],heads.length>1?heads[1]:lines.length).join('\n').trim();
+}
+
+/* ══════════ 매핑 규칙 저장 ══════════ */
+document.getElementById('saveMap').onclick=()=>{
+  const o={version:4,sheet:document.getElementById('sheet').value,headerRow:HDR+1,dataStart:DSTART+1,dataEnd:DEND+1,
+    templates:TMPL,optProg:OPT_PROG,optConc:OPT_CONC,fields:{}};
+  FIELDS.forEach(f=>{const c=MAP[f.key];o.fields[f.key]=c==null?null:{col:c,colName:colName(c),header:headText(c).leaf,label:labelOf(f)}});
+  dl('rcm_mapping.json',new Blob([JSON.stringify(o,null,2)],{type:'application/json'}));
+};
+document.getElementById('loadMapBtn').onclick=()=>document.getElementById('loadMap').click();
+document.getElementById('loadMap').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=ev=>{try{applyMapping(JSON.parse(ev.target.result));renderMap()}
+    catch(err){alert('매핑 파일을 읽지 못했습니다: '+err.message)}};
+  r.readAsText(f);
+};
+function applyMapping(m){
+  if(m.headerRow)HDR=m.headerRow-1;if(m.dataStart)DSTART=m.dataStart-1;if(m.dataEnd)DEND=m.dataEnd-1;
+  if(m.templates)TMPL=Object.assign({},DEF_TMPL,m.templates);
+  if(m.optProg&&m.optProg.length)OPT_PROG=m.optProg;
+  if(m.optConc&&m.optConc.length)OPT_CONC=m.optConc;
+  FIELDS.forEach(fd=>{const s=m.fields&&m.fields[fd.key];if(!s){MAP[fd.key]=null;return}
+    let c=null;for(let i=0;i<NCOL;i++)if(norm(headText(i).leaf)===norm(s.header)){c=i;break}
+    MAP[fd.key]=c!=null?c:(s.col!=null&&s.col<NCOL?s.col:null);MAP['_s_'+fd.key]=99;
+    if(s.label)LABEL[fd.key]=s.label});
+  syncRowInputs();
+}
+
+/* ══════════ 설계평가 생성 / RCM 반영 ══════════ */
+function rowVals(r){
+  const g=k=>MAP[k]==null?'':clean(GRID[r][MAP[k]]);
+  const o={};FIELDS.forEach(f=>o[f.key]=g(f.key));
+  if(!o.popComplete)o.popComplete=extractCompleteness(o.testProc);
+  return o;
+}
+function tokenVals(o){
+  return {'프로세스코드':o.processCode,'프로세스명':o.processName,'통제활동코드':o.controlCode,
+   '통제활동명':o.controlName,'핵심통제':o.keyControl,'통제주기':shortFreq(o.frequency),
+   '통제위험':o.controlRisk,'통제유형':shortType(o.controlType),'통제위험내용':o.riskName,
+   '통제활동기술':o.controlDesc,'테스트절차':o.testProc,'통제부서':o.controlDept,
+   '통제책임자':o.controlOwner,'모집단':o.population,'모집단완전성':o.popComplete,'관련문서':o.relatedDoc};
+}
+function genTexts(o){
+  const v=tokenVals(o);
+  if(!o.edited.detail)o.detail=fill(TMPL.detail,v);
+  [1,2,3,4,5].forEach(i=>{if(!o.edited['a'+i])o.attrs[i-1]=fill(TMPL['a'+i],v)});
+}
+function scanRCM(){
+  const list=[];
+  for(let r=DSTART;r<=DEND;r++){
+    const o=rowVals(r); if(!o.controlCode&&!o.controlName)continue;
+    o.srcRow=r; list.push(o);
+  }
+  return list;
+}
+function buildProcs(list){
+  const map={};
+  list.forEach(o=>{
+    const p=o.processCode||'기타';
+    if(!map[p])map[p]={code:p,name:o.processName||'',rows:[],ctrls:[]};
+    if(!map[p].name&&o.processName)map[p].name=o.processName;
+    map[p].rows.push(o.srcRow); map[p].ctrls.push(o);
+  });
+  return Object.values(map);
+}
+document.getElementById('build').onclick=()=>{
+  if(PROCS.length&&!confirm('작성중인 내용(증빙·수정문구 포함)이 모두 지워집니다. 새로 생성할까요?'))return;
+  const list=scanRCM();
+  list.forEach(o=>{o.edited={};o.attrs=[];o.evidence=[];o.progress=DEF_PROGRESS;o.conclusion=DEF_CONCL;genTexts(o)});
+  PROCS=buildProcs(list);
+  if(!PROCS.length){alert('통제활동이 인식되지 않았습니다.');return}
+  CURPROC=PROCS[0].code;SEL=0;
+  document.getElementById('buildmsg').innerHTML='<div class="msg ok">통제 '+list.length+'건 · 프로세스 '+PROCS.length+'개 생성</div>';
+  afterBuild();
+};
+document.getElementById('merge').onclick=()=>{
+  const old={};PROCS.forEach(p=>p.ctrls.forEach(o=>old[o.controlCode]=o));
+  const list=scanRCM();let upd=0,add=0;
+  list.forEach(o=>{
+    const prev=old[o.controlCode];
+    if(prev){
+      o.edited=prev.edited||{};o.attrs=(prev.attrs||[]).slice();o.evidence=prev.evidence||[];
+      o.progress=prev.progress||DEF_PROGRESS;o.conclusion=prev.conclusion||DEF_CONCL;
+      o.detail=prev.detail;
+      ['controlDept','controlOwner','population','popComplete','relatedDoc','testProc'].forEach(k=>{
+        if(prev.edited&&prev.edited[k])o[k]=prev[k]});
+      delete old[o.controlCode];upd++;
+    }else{o.edited={};o.attrs=[];o.evidence=[];o.progress=DEF_PROGRESS;o.conclusion=DEF_CONCL;add++}
+    genTexts(o);
+  });
+  const dropped=Object.values(old);
+  dropped.forEach(o=>{o.removed=true;list.push(o)});
+  PROCS=buildProcs(list);
+  if(!PROCS.some(p=>p.code===CURPROC))CURPROC=PROCS[0].code;
+  SEL=0;
+  document.getElementById('buildmsg').innerHTML='<div class="msg ok">갱신 '+upd+'건 · 신규 '+add+'건'+
+    (dropped.length?' · 새 RCM에 없는 통제 '+dropped.length+'건은 <b>삭제됨</b>으로 표시되어 남아 있습니다':'')+'</div>';
+  afterBuild();
+};
+function afterBuild(){
+  renderTmpl();renderEval();renderExport();
+  ['tmplcard','evalcard','expcard'].forEach(i=>document.getElementById(i).classList.remove('hidden'));
+  document.getElementById('merge').disabled=false;
+  document.getElementById('evalcard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+document.getElementById('regen').onclick=()=>{PROCS.forEach(p=>p.ctrls.forEach(genTexts));renderEval()};
+
+/* ══════════ 문구·선택목록 UI ══════════ */
+function renderTmpl(){
+  const tokens=['프로세스코드','통제활동코드','통제활동명','핵심통제','통제주기','통제위험','통제유형',
+    '통제위험내용','통제활동기술','통제부서','통제책임자','모집단','모집단완전성','관련문서','테스트절차'];
+  document.getElementById('tokenhelp').innerHTML=
+    '쓸 수 있는 값: '+tokens.map(t=>'<b>{'+t+'}</b>').join(' ')+
+    '<br>조사 자동: <b>{통제활동명|은}</b> → 은/는 · <b>{통제유형|로}</b> → 로/으로 · <b>{모집단|이}</b> → 이/가 · <b>{통제활동명|을}</b> → 을/를';
+  const box=document.getElementById('tmplfields');box.innerHTML='';
+  TMPL_META.forEach(([k,lab,hint])=>{
+    const d=document.createElement('div');d.className='tmpl';
+    d.innerHTML='<label>'+esc(lab)+'</label><textarea rows="'+(k==='detail'?3:2)+'" data-t="'+k+'">'+esc(TMPL[k])+'</textarea>'+
+      (hint?'<div class="samp" style="max-width:none;color:var(--warn);margin-top:3px">'+esc(hint)+'</div>':'');
+    box.appendChild(d);
+  });
+  box.querySelectorAll('textarea').forEach(t=>t.onchange=e=>{TMPL[e.target.dataset.t]=e.target.value});
+  const op=document.getElementById('optProg'),oc=document.getElementById('optConc');
+  op.value=OPT_PROG.join('\n');oc.value=OPT_CONC.join('\n');
+  op.onchange=()=>{OPT_PROG=op.value.split('\n').map(s=>s.trim()).filter(Boolean);renderEval()};
+  oc.onchange=()=>{OPT_CONC=oc.value.split('\n').map(s=>s.trim()).filter(Boolean);renderEval()};
+}
+
+/* ══════════ 설계평가 목록 ══════════ */
+const curProc=()=>PROCS.find(x=>x.code===CURPROC);
+function renderEval(){
+  const tabs=document.getElementById('proctabs');tabs.innerHTML='';
+  PROCS.forEach(p=>{
+    const b=document.createElement('div');b.className='tab'+(p.code===CURPROC?' on':'');
+    b.textContent=p.code+(p.name?' '+p.name:'')+' ('+p.ctrls.length+')';
+    b.onclick=()=>{CURPROC=p.code;SEL=0;renderEval()};tabs.appendChild(b);
+  });
+  const p=curProc();if(!p)return;
+  document.getElementById('idxhead').innerHTML=
+    ['#',L('controlCode'),L('controlName'),L('keyControl'),L('frequency'),'Link','설계평가 진행현황','설계평가 결론','증빙']
+    .map(h=>'<th>'+esc(h)+'</th>').join('');
+  const tb=document.getElementById('idxrows');tb.innerHTML='';
+  p.ctrls.forEach((o,i)=>{
+    const tr=document.createElement('tr');tr.className='ctrl';
+    if(i===SEL)tr.style.background='#EAF3F5';
+    tr.innerHTML='<td>'+(i+1)+'</td>'+
+      '<td><span class="col-chip">'+esc(o.controlCode)+'</span>'+(o.removed?' <span class="badge b-bad">삭제됨</span>':'')+'</td>'+
+      '<td>'+esc(o.controlName)+'</td><td>'+esc(o.keyControl)+'</td><td>'+esc(o.frequency)+'</td>'+
+      '<td><span class="col-chip">'+esc(o.controlCode)+'</span></td>'+
+      '<td>'+selHTML(OPT_PROG,o.progress,'data-p="'+i+'" style="width:196px"')+'</td>'+
+      '<td>'+selHTML(OPT_CONC,o.conclusion,'data-c="'+i+'" style="width:118px"')+'</td>'+
+      '<td>'+(o.evidence.length?'<span class="badge b-ok">'+o.evidence.length+'건</span>':'<span class="badge b-warn">없음</span>')+'</td>';
+    tr.onclick=e=>{if(e.target.tagName!=='SELECT'){SEL=i;renderEval();
+      document.getElementById('sheetview').scrollIntoView({behavior:'smooth',block:'start'})}};
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('select[data-p]').forEach(el=>el.onchange=e=>{p.ctrls[+e.target.dataset.p].progress=e.target.value;renderSheet()});
+  tb.querySelectorAll('select[data-c]').forEach(el=>el.onchange=e=>{p.ctrls[+e.target.dataset.c].conclusion=e.target.value;renderSheet()});
+  document.getElementById('evalcard').classList.remove('hidden');
+  renderSheet();
+}
+
+/* ══════════ 통제 시트 (엑셀과 동일 배치) ══════════ */
+function svRow(n,label,label2,key,val,rows,opt){
+  opt=opt||{};
+  const lb=opt.span?'<td class="lb" colspan="2">'+esc(label).replace(/\n/g,'<br>')+'</td>'
+    :(opt.skipB?'':'<td class="lb"'+(opt.rowspan?' rowspan="'+opt.rowspan+'"':'')+'>'+esc(label).replace(/\n/g,'<br>')+'</td>')
+      +'<td class="lb2">'+esc(label2||'')+'</td>';
+  const ctl=opt.sel?selHTML(opt.sel,val,'data-k="'+key+'"')
+    :'<textarea rows="'+rows+'" data-k="'+key+'"'+(opt.ro?' readonly':'')+'>'+esc(val==null?'':val)+'</textarea>';
+  return '<tr><td class="rn">'+n+'</td>'+lb+'<td class="vl">'+ctl+'</td></tr>';
+}
+function renderSheet(){
+  const p=curProc(); if(!p||!p.ctrls.length){document.getElementById('sheetview').classList.add('hidden');return}
+  if(SEL>=p.ctrls.length)SEL=0;
+  const o=p.ctrls[SEL];
+  document.getElementById('svcode').textContent=o.controlCode;
+  document.getElementById('svname').textContent=o.controlName;
+  const sp=document.getElementById('svprog');
+  sp.outerHTML=selHTML(OPT_PROG,o.progress,'id="svprog" style="width:210px"');
+  let h='<table class="sv">';
+  h+=svRow(2,L('processCode'),'','processCode',o.processCode,1,{span:1});
+  h+=svRow(3,L('controlCode'),'','controlCode',o.controlCode,1,{span:1,ro:1});
+  h+=svRow(4,L('controlName'),'','controlName',o.controlName,1,{span:1});
+  h+=svRow(5,L('keyControl'),'','keyControl',o.keyControl,1,{span:1});
+  h+=svRow(6,L('frequency'),'','frequency',o.frequency,1,{span:1});
+  h+=svRow(7,L('controlRisk'),'','controlRisk',o.controlRisk,1,{span:1});
+  h+=svRow(8,L('controlType'),'','controlType',o.controlType,1,{span:1});
+  h+='<tr><td class="rn">9</td><td class="note" colspan="3">Evaluate the design of the control based on our walkthrough:</td></tr>';
+  h+=svRow(10,'통제활동 설계평가 수행내역\n(Procedure performed by attributes)','설계평가 상세내역','detail',o.detail,6);
+  for(let i=0;i<5;i++)
+    h+=svRow(11+i,i===0?'통제활동 설계평가 속성\n(Design Testing attributes)':'',ATTR_LABEL[i],'a'+(i+1),o.attrs[i],4,
+      i===0?{rowspan:5}:{skipB:1});
+  h+=svRow(16,'통제의 수행',L('controlDept'),'controlDept',o.controlDept,1,{rowspan:2});
+  h+=svRow(17,'',L('controlOwner'),'controlOwner',o.controlOwner,1,{skipB:1});
+  h+=svRow(18,'모집단',L('population'),'population',o.population,2,{rowspan:2});
+  h+=svRow(19,'',L('popComplete'),'popComplete',o.popComplete,4,{skipB:1});
+  h+=svRow(20,'테스트 수행 절차',L('relatedDoc'),'relatedDoc',o.relatedDoc,2,{rowspan:2});
+  h+=svRow(21,'',L('testProc'),'testProc',o.testProc,8,{skipB:1});
+  h+=svRow(22,'설계평가 결론','','conclusion',o.conclusion,1,{span:1,sel:OPT_CONC});
+  h+='<tr><td class="rn">23</td><td class="spacer" colspan="3"></td></tr>';
+  h+='<tr><td class="rn">24</td><td class="ev" colspan="3">증빙</td></tr>';
+  let rn=25;
+  o.evidence.forEach((it,i)=>{
+    h+='<tr><td class="rn">'+rn+'</td><td class="evcap" colspan="3">'+
+       '<div class="evtools"><span class="n">증빙 '+(i+1)+'</span>'+
+       (it.type==='image'?'<span>'+esc(it.name||'캡쳐')+' · 원본 '+it.w+'×'+it.h+'</span>'+
+         '<span>크기</span><input type="range" min="10" max="200" step="5" value="'+it.scale+'" data-sc="'+i+'">'+
+         '<input type="number" min="10" max="400" value="'+it.scale+'" data-scn="'+i+'" style="width:66px">'+
+         '<span>% → '+imgBox(it).w+'×'+imgBox(it).h+'px</span>'
+        :'<span>텍스트</span>')+
+       '<span class="flexspace"></span>'+
+       '<button class="ghost tiny" data-up="'+i+'">↑</button>'+
+       '<button class="ghost tiny" data-dn="'+i+'">↓</button>'+
+       '<button class="ghost tiny" data-del="'+i+'">삭제</button></div>'+
+       '<textarea rows="'+Math.max(2,capLines(it.caption))+'" data-cap="'+i+'" placeholder="증빙 설명 · 직접 입력">'+esc(it.caption||'')+'</textarea></td></tr>';
+    rn++;
+    if(it.type==='image'){
+      const bx=imgBox(it);
+      h+='<tr><td class="rn">'+rn+'</td><td class="evimg" colspan="3" rowspan="'+bx.rows+'">'+
+         '<img src="'+it.dataUrl+'" style="width:'+bx.w+'px"></td></tr>';rn++;
+      for(let k=1;k<bx.rows;k++){h+='<tr><td class="rn">'+rn+'</td></tr>';rn++}
+      h+='<tr><td class="rn">'+rn+'</td><td class="spacer" colspan="3"></td></tr>';rn++;
+    }
+  });
+  h+='</table>';
+  const box=document.getElementById('svbody');box.innerHTML=h;
+  box.querySelectorAll('[data-k]').forEach(t=>{
+    const ev=t.tagName==='SELECT'?'onchange':'oninput';
+    t[ev]=e=>{
+      const k=e.target.dataset.k,v=e.target.value;
+      if(k==='detail'){o.detail=v;o.edited.detail=1}
+      else if(/^a[1-5]$/.test(k)){o.attrs[+k[1]-1]=v;o.edited[k]=1}
+      else if(k==='conclusion'){o.conclusion=v;syncIdx()}
+      else {o[k]=v;o.edited[k]=1}
+    };
+  });
+  document.getElementById('svprog').onchange=e=>{o.progress=e.target.value;syncIdx()};
+  document.getElementById('prevCtrl').onclick=()=>{SEL=(SEL-1+p.ctrls.length)%p.ctrls.length;renderEval()};
+  document.getElementById('nextCtrl').onclick=()=>{SEL=(SEL+1)%p.ctrls.length;renderEval()};
+  wireEvidence(o,box);
+  document.getElementById('sheetview').classList.remove('hidden');
+}
+function syncIdx(){
+  const p=curProc(),tb=document.getElementById('idxrows');
+  tb.querySelectorAll('select[data-p]').forEach(el=>el.value=p.ctrls[+el.dataset.p].progress);
+  tb.querySelectorAll('select[data-c]').forEach(el=>el.value=p.ctrls[+el.dataset.c].conclusion);
+  [...tb.querySelectorAll('tr.ctrl')].forEach((tr,i)=>{
+    const n=p.ctrls[i].evidence.length;
+    tr.lastElementChild.innerHTML=n?'<span class="badge b-ok">'+n+'건</span>':'<span class="badge b-warn">없음</span>';
+  });
+}
+/* ── 증빙 ── */
+function addImages(o,files){
+  [...files].filter(f=>/^image\//.test(f.type)).forEach(f=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const w=img.naturalWidth,hh=img.naturalHeight;
+        o.evidence.push({type:'image',dataUrl:ev.target.result,w,h:hh,name:f.name||'캡쳐',caption:'',
+          scale:Math.min(100,Math.round(MAX_IMG_W/w*100))});
+        renderSheet();syncIdx();
+      };
+      img.src=ev.target.result;
+    };
+    r.readAsDataURL(f);
+  });
+}
+function wireEvidence(o,box){
+  const d=document.getElementById('evdrop'),f=document.getElementById('evfile');
+  d.onclick=()=>f.click();
+  d.ondragover=e=>{e.preventDefault();d.classList.add('over')};
+  d.ondragleave=()=>d.classList.remove('over');
+  d.ondrop=e=>{e.preventDefault();d.classList.remove('over');addImages(o,e.dataTransfer.files)};
+  f.onchange=e=>{addImages(o,e.target.files);e.target.value=''};
+  document.getElementById('addText').onclick=()=>{o.evidence.push({type:'text',caption:''});renderSheet();syncIdx()};
+  document.onpaste=e=>{
+    if(document.getElementById('sheetview').classList.contains('hidden'))return;
+    const items=[...(e.clipboardData&&e.clipboardData.items||[])].filter(i=>/^image\//.test(i.type));
+    if(!items.length)return;
+    e.preventDefault();
+    const cur=curProc().ctrls[SEL];
+    addImages(cur,items.map(i=>i.getAsFile()).filter(Boolean));
+  };
+  box.querySelectorAll('textarea[data-cap]').forEach(t=>t.oninput=e=>{o.evidence[+e.target.dataset.cap].caption=e.target.value});
+  box.querySelectorAll('button[data-del]').forEach(b=>b.onclick=()=>{o.evidence.splice(+b.dataset.del,1);renderSheet();syncIdx()});
+  box.querySelectorAll('button[data-up]').forEach(b=>b.onclick=()=>{const i=+b.dataset.up;if(i>0){
+    [o.evidence[i-1],o.evidence[i]]=[o.evidence[i],o.evidence[i-1]];renderSheet()}});
+  box.querySelectorAll('button[data-dn]').forEach(b=>b.onclick=()=>{const i=+b.dataset.dn;if(i<o.evidence.length-1){
+    [o.evidence[i+1],o.evidence[i]]=[o.evidence[i],o.evidence[i+1]];renderSheet()}});
+  const setScale=(i,v)=>{v=Math.max(10,Math.min(400,+v||100));o.evidence[i].scale=v;renderSheet()};
+  box.querySelectorAll('input[data-sc]').forEach(r=>{
+    r.oninput=e=>{const i=+e.target.dataset.sc,v=+e.target.value;
+      const img=box.querySelectorAll('img')[[...box.querySelectorAll('input[data-sc]')].indexOf(e.target)];
+      if(img)img.style.width=Math.round(o.evidence[i].w*v/100)+'px';};
+    r.onchange=e=>setScale(+e.target.dataset.sc,e.target.value);
+  });
+  box.querySelectorAll('input[data-scn]').forEach(n=>n.onchange=e=>setScale(+e.target.dataset.scn,e.target.value));
+}
+
+/* ══════════ 작업 저장 / 불러오기 ══════════ */
+document.getElementById('saveProj').onclick=()=>{
+  if(!PROCS.length){alert('먼저 설계평가를 생성하세요.');return}
+  const o={version:5,savedAt:new Date().toISOString(),templates:TMPL,optProg:OPT_PROG,optConc:OPT_CONC,
+    labels:LABEL,mapping:{},headerRow:HDR+1,dataStart:DSTART+1,dataEnd:DEND+1,
+    rcm:{grid:GRID,merges:MERGES,ncol:NCOL},
+    procs:PROCS.map(p=>({code:p.code,name:p.name,ctrls:p.ctrls}))};
+  FIELDS.forEach(f=>{const c=MAP[f.key];o.mapping[f.key]=c==null?null:{col:c,header:headText(c).leaf,label:labelOf(f)}});
+  dl('설계평가_작업저장_'+new Date().toISOString().slice(0,10)+'.json',
+     new Blob([JSON.stringify(o)],{type:'application/json'}));
+};
+document.getElementById('loadProjBtn').onclick=()=>document.getElementById('loadProj').click();
+document.getElementById('loadProj').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=ev=>{try{
+    const m=JSON.parse(ev.target.result);
+    TMPL=Object.assign({},DEF_TMPL,m.templates||{});
+    if(m.optProg&&m.optProg.length)OPT_PROG=m.optProg;
+    if(m.optConc&&m.optConc.length)OPT_CONC=m.optConc;
+    LABEL=m.labels||{};
+    if(m.headerRow)HDR=m.headerRow-1;
+    if(m.dataStart)DSTART=m.dataStart-1;
+    if(m.dataEnd)DEND=m.dataEnd-1;
+    if(m.rcm&&m.rcm.grid&&m.rcm.grid.length){
+      GRID=m.rcm.grid; MERGES=m.rcm.merges||[]; NCOL=m.rcm.ncol||(GRID[0]?GRID[0].length:0);
+      FILLED=GRID.map(r=>r.slice());
+      MERGES.forEach(mm=>{const v=(GRID[mm.s.r]||[])[mm.s.c];
+        for(let r=mm.s.r;r<=mm.e.r;r++)for(let c=mm.s.c;c<=mm.e.c;c++){if(FILLED[r])FILLED[r][c]=v}});
+      syncRowInputs();
+      document.getElementById('sheetcard').classList.remove('hidden');
+      renderMap();
+    }
+    if(m.mapping)Object.keys(m.mapping).forEach(k=>{const s=m.mapping[k];MAP[k]=s?s.col:null;MAP['_s_'+k]=99;
+      if(s&&s.label)LABEL[k]=s.label});
+    PROCS=(m.procs||[]).map(p=>({code:p.code,name:p.name,rows:[],ctrls:p.ctrls.map(c=>{
+      c.edited=c.edited||{};c.attrs=c.attrs||[];c.evidence=(c.evidence||[]).map(x=>{
+        if(x.type==='image'&&!x.scale)x.scale=Math.min(100,Math.round(MAX_IMG_W/x.w*100));return x});
+      return c})}));
+    if(!PROCS.length){alert('저장된 통제가 없습니다.');return}
+    CURPROC=PROCS[0].code;SEL=0;
+    document.getElementById('loadmsg').innerHTML='<div class="msg ok">작업을 복원했습니다 · 통제 '+
+      PROCS.reduce((n,p)=>n+p.ctrls.length,0)+'건. RCM이 바뀐 경우 새 RCM 파일을 올린 뒤 <b>RCM 반영</b>을 누르세요.</div>';
+    afterBuild();
+  }catch(err){alert('작업 파일을 읽지 못했습니다: '+err.message)}};
+  r.readAsText(f);
+};
+
+/* ══════════ 엑셀 내보내기 ══════════ */
+function renderExport(){
+  const box=document.getElementById('filelist');box.innerHTML='';
+  PROCS.forEach(p=>{
+    const ev=p.ctrls.reduce((n,c)=>n+c.evidence.length,0);
+    const d=document.createElement('div');d.className='filerow';
+    d.innerHTML='<strong>'+esc(fileNameOf(p))+'</strong><span>설계평가 '+p.ctrls.length+'건 · 증빙 '+ev+'건'+
+      (GRID.length&&NCOL?'':' · <b style="color:#9B2C2C">RCM 원본 없음</b>')+'</span>';
+    const b=document.createElement('button');b.className='ghost';b.textContent='내보내기';
+    b.style.marginLeft='auto';b.onclick=()=>exportProc(p);
+    d.appendChild(b);box.appendChild(d);
+  });
+}
+const fileNameOf=p=>'설계평가_'+p.code+(p.name?'_'+p.name:'')+'.xlsx';
+const FX_HELP={
+  lookup:'통제활동 번호를 키로 RCM 시트를 조회합니다. RCM에서 행을 정렬·삽입·삭제해도 값이 따라옵니다. 통제번호가 중복·공백이면 #N/A 가 납니다.',
+  direct:'RCM 시트의 해당 셀을 그대로 가리킵니다. 가볍지만 RCM 행 순서가 바뀌면 다른 통제 값을 가져옵니다.',
+  value:'수식 없이 값만 넣습니다. RCM 시트를 고쳐도 반영되지 않습니다.'};
+function setFxHelp(){const h=document.getElementById('fxhelp');if(h)h.textContent=FX_HELP[FX_MODE]}
+document.getElementById('fxmode').onchange=e=>{FX_MODE=e.target.value;setFxHelp()};
+setFxHelp();
+document.getElementById('expAll').onclick=async()=>{
+  const m=document.getElementById('expmsg');
+  for(let i=0;i<PROCS.length;i++){m.innerHTML='<span class="samp">'+(i+1)+'/'+PROCS.length+' 만드는 중…</span>';
+    await exportProc(PROCS[i]);await new Promise(r=>setTimeout(r,500))}
+  m.innerHTML='<span class="badge b-ok">'+PROCS.length+'개 파일 저장 완료</span>';
+};
+const BORDER={top:{style:'thin',color:{argb:'FFC8D2D8'}},left:{style:'thin',color:{argb:'FFC8D2D8'}},
+  bottom:{style:'thin',color:{argb:'FFC8D2D8'}},right:{style:'thin',color:{argb:'FFC8D2D8'}}};
+function styleLabel(c){c.font={name:'맑은 고딕',size:10,bold:true};c.alignment={vertical:'middle',wrapText:true};
+  c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEDF2F4'}};c.border=BORDER}
+function styleVal(c){c.font={name:'맑은 고딕',size:10};c.alignment={vertical:'top',wrapText:true};c.border=BORDER}
+const dvList=arr=>({type:'list',allowBlank:true,showErrorMessage:false,
+  formulae:['"'+arr.map(s=>String(s).replace(/,/g,' ')).join(',')+'"']});
+
+async function exportProc(p){
+  const wb=new ExcelJS.Workbook();
+  const rcmRow=new Map();                     // 통제 → 출력 RCM 시트의 행번호
+  const keyCol=MAP.controlCode!=null?colName(MAP.controlCode):null;
+  const fx=(o,key,val,anchor)=>{              // RCM 값을 수식으로 연결
+    const r=rcmRow.get(o), c=MAP[key];
+    if(FX_MODE==='value'||r==null||c==null||(o.edited&&o.edited[key])) return val;
+    const col=colName(c), res=(val===''||val==null)?null:val;
+    if(FX_MODE==='lookup'&&keyCol)
+      return {formula:'INDEX(RCM!$'+col+':$'+col+',MATCH('+(anchor||'$D$3')+',RCM!$'+keyCol+':$'+keyCol+',0))',result:res};
+    return {formula:'RCM!$'+col+'$'+r, result:res};
+  };
+  /* 시트1 : RCM (해당 프로세스만) */
+  const hasRCM=GRID.length>0&&NCOL>0&&DSTART>0;
+  const rcm=wb.addWorksheet('RCM',hasRCM?{views:[{state:'frozen',ySplit:DSTART}]}:{});
+  if(!hasRCM){
+    rcm.getCell('B2').value='RCM 원본 데이터가 없어 이 시트는 비어 있습니다. RCM 파일을 불러온 뒤 다시 내보내세요.';
+    rcm.getCell('B2').font={name:'맑은 고딕',size:10,bold:true,color:{argb:'FF9B2C2C'}};
+    rcm.getColumn(2).width=90;
+  }
+  if(hasRCM) for(let r=0;r<DSTART;r++){
+    const row=rcm.getRow(r+1);
+    for(let c=0;c<NCOL;c++){const v=GRID[r][c];if(v!=null&&v!==''){const cell=row.getCell(c+1);cell.value=v;
+      cell.font={name:'맑은 고딕',size:9,bold:true};cell.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEDF2F4'}};cell.border=BORDER}}
+  }
+  if(hasRCM) MERGES.forEach(m=>{if(m.e.r<DSTART){try{rcm.mergeCells(m.s.r+1,m.s.c+1,m.e.r+1,m.e.c+1)}catch(e){}}});
+  const rcmRows=hasRCM?p.ctrls.filter(o=>o.srcRow!=null&&!o.removed&&GRID[o.srcRow]):[];
+  rcmRows.forEach((o,i)=>{
+    rcmRow.set(o,DSTART+1+i);
+    const row=rcm.getRow(DSTART+1+i);
+    for(let c=0;c<NCOL;c++){
+      const v=GRID[o.srcRow][c]; if(v==null||v==='')continue;
+      const cell=row.getCell(c+1);
+      const d=ymd(v);
+      if(d)cell.value=d;
+      else cell.value=(/^-?\d+(\.\d+)?$/.test(v)&&String(v).length<12)?Number(v):v;
+      cell.font={name:'맑은 고딕',size:9};cell.alignment={vertical:'top',wrapText:true};cell.border=BORDER;
+    }
+  });
+  if(hasRCM){
+    for(let c=1;c<=NCOL;c++)rcm.getColumn(c).width=18;
+    if(MAP.controlDesc!=null)rcm.getColumn(MAP.controlDesc+1).width=60;
+    if(MAP.testProc!=null)rcm.getColumn(MAP.testProc+1).width=60;
+    if(rcmRows.length)rcm.autoFilter={from:{row:HDR+1,column:1},to:{row:DSTART+rcmRows.length,column:NCOL}};
+  }
+
+  /* 시트2 : 설계평가 */
+  const idx=wb.addWorksheet('설계평가');
+  idx.getCell('B2').value='Test of Design & Implementation Template';
+  idx.getCell('B2').font={name:'맑은 고딕',size:13,bold:true};
+  idx.mergeCells('B5:E5');idx.mergeCells('F5:H5');
+  idx.getCell('B5').value='RCM';idx.getCell('F5').value='설계평가 수행 결과';
+  ['B5','F5'].forEach(a=>{const c=idx.getCell(a);c.font={name:'맑은 고딕',size:10,bold:true};
+    c.alignment={horizontal:'center',vertical:'middle'};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFDCE6EA'}};c.border=BORDER});
+  [L('controlCode'),L('controlName'),L('keyControl'),L('frequency'),'Link','설계평가 진행현황','설계평가 결론']
+   .forEach((h,i)=>{const c=idx.getRow(6).getCell(2+i);c.value=h;styleLabel(c);
+    c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
+  p.ctrls.forEach((o,i)=>{
+    const r=idx.getRow(7+i);
+    const anc='$B'+(7+i);
+    const cKey=r.getCell(2);cKey.value=o.controlCode;styleVal(cKey);
+    [['controlName',o.controlName],['keyControl',o.keyControl],['frequency',o.frequency]]
+      .forEach(([k2,v],k)=>{const c=r.getCell(3+k);c.value=fx(o,k2,v,anc);styleVal(c)});
+    const lk=r.getCell(6);
+    lk.value={text:o.controlCode,hyperlink:"#'"+o.controlCode+"'!A1"};
+    lk.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};lk.border=BORDER;
+    const cp=r.getCell(7);cp.value=o.progress;styleVal(cp);cp.dataValidation=dvList(OPT_PROG);
+    const cc=r.getCell(8);cc.value=o.conclusion;styleVal(cc);cc.dataValidation=dvList(OPT_CONC);
+  });
+  [18,44,14,20,20,26,16].forEach((w,i)=>idx.getColumn(2+i).width=w);
+  idx.getColumn(1).width=3;
+
+  /* 시트3~ : 통제별 */
+  p.ctrls.forEach(o=>{
+    const ws=wb.addWorksheet(o.controlCode.substring(0,31));
+    ws.getColumn(1).width=8.4;ws.getColumn(2).width=28.2;ws.getColumn(3).width=33;ws.getColumn(4).width=90;
+    const put=(r,label,key)=>{const b=ws.getCell(r,2);b.value=label;styleLabel(b);ws.mergeCells(r,2,r,3);
+      const d=ws.getCell(r,4);d.value=fx(o,key,o[key]);styleVal(d)};
+    put(2,L('processCode'),'processCode');
+    {const b=ws.getCell(3,2);b.value=L('controlCode');styleLabel(b);ws.mergeCells(3,2,3,3);
+     const d=ws.getCell(3,4);d.value=o.controlCode;styleVal(d);}
+    put(4,L('controlName'),'controlName');
+    put(5,L('keyControl'),'keyControl');
+    put(6,L('frequency'),'frequency');
+    put(7,L('controlRisk'),'controlRisk');
+    put(8,L('controlType'),'controlType');
+    const e=ws.getCell(9,2);e.value='Evaluate the design of the control based on our walkthrough:';
+    e.font={name:'맑은 고딕',size:10,bold:true,italic:true};
+    ws.getCell(10,2).value='통제활동 설계평가 수행내역(Procedure performed by attributes)';styleLabel(ws.getCell(10,2));
+    ws.getCell(10,3).value='설계평가 상세내역';styleLabel(ws.getCell(10,3));
+    ws.getCell(10,4).value=o.detail;styleVal(ws.getCell(10,4));
+    ws.getCell(11,2).value='통제활동 설계평가 속성\n(Design Testing attributes)';
+    for(let r=11;r<=15;r++){styleLabel(ws.getCell(r,2));
+      const c=ws.getCell(r,3);c.value=ATTR_LABEL[r-11];styleLabel(c);
+      const d=ws.getCell(r,4);d.value=o.attrs[r-11];styleVal(d)}
+    ws.mergeCells(11,2,15,2);
+    ws.getCell(16,2).value='통제의 수행';ws.mergeCells(16,2,17,2);
+    [[16,L('controlDept'),'controlDept'],[17,L('controlOwner'),'controlOwner']].forEach(([r,a,k2])=>{
+      styleLabel(ws.getCell(r,2));const c=ws.getCell(r,3);c.value=a;styleLabel(c);
+      const d=ws.getCell(r,4);d.value=fx(o,k2,o[k2]);styleVal(d)});
+    ws.getCell(18,2).value='모집단';ws.mergeCells(18,2,19,2);
+    [[18,L('population'),'population'],[19,L('popComplete'),'popComplete']].forEach(([r,a,k2])=>{
+      styleLabel(ws.getCell(r,2));const c=ws.getCell(r,3);c.value=a;styleLabel(c);
+      const d=ws.getCell(r,4);d.value=fx(o,k2,o[k2]);styleVal(d)});
+    ws.getCell(20,2).value='테스트 수행 절차';ws.mergeCells(20,2,21,2);
+    [[20,L('relatedDoc'),'relatedDoc'],[21,L('testProc'),'testProc']].forEach(([r,a,k2])=>{
+      styleLabel(ws.getCell(r,2));const c=ws.getCell(r,3);c.value=a;styleLabel(c);
+      const d=ws.getCell(r,4);d.value=fx(o,k2,o[k2]);styleVal(d)});
+    ws.getCell(22,2).value='설계평가 결론';ws.mergeCells(22,2,22,3);styleLabel(ws.getCell(22,2));
+    const last=6+p.ctrls.length;
+    const dc=ws.getCell(22,4);
+    dc.value={formula:"INDEX(설계평가!$B$7:$H$"+last+",MATCH($D$3,설계평가!$B$7:$B$"+last+",0),7)",result:o.conclusion};
+    styleVal(dc);
+    ws.getCell(24,2).value='증빙';ws.mergeCells(24,2,24,4);
+    styleLabel(ws.getCell(24,2));
+    let er=25;
+    (o.evidence||[]).forEach(it=>{
+      const cap=it.caption||'';
+      ws.mergeCells(er,2,er,4);
+      const c=ws.getCell(er,2);c.value=cap;
+      c.font={name:'맑은 고딕',size:10};c.alignment={vertical:'middle',wrapText:true};c.border=BORDER;
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4F8F9'}};
+      ws.getRow(er).height=capHeight(cap);
+      er++;
+      if(it.type==='image'){
+        const bx=imgBox(it);
+        try{
+          const m=/^data:image\/(\w+);base64,(.+)$/.exec(it.dataUrl);
+          if(m){
+            const id=wb.addImage({base64:m[2],extension:(m[1]==='jpg'?'jpeg':m[1])});
+            const per=bx.pt/bx.rows;
+            for(let k=0;k<bx.rows;k++) ws.getRow(er+k).height=Math.round(per*100)/100;
+            // tl~br 사각형에 가둔다 → 아래 설명행을 절대 덮지 않음
+            ws.addImage(id,{tl:{col:1,row:er-1},br:{col:colFrac(bx.w),row:er-1+bx.rows},editAs:'oneCell'});
+          }
+        }catch(err){}
+        ws.getRow(er+bx.rows).height=10;      // 이미지와 다음 설명 사이 여백
+        er+=bx.rows+1;
+      }
+    });
+  });
+  const buf=await wb.xlsx.writeBuffer();
+  dl(fileNameOf(p),new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+}
+</script>
