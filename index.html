@@ -119,7 +119,7 @@
     <h1>RCM → 설계평가 템플릿 생성기</h1>
     <div class="sub">RCM 열을 자동 인식하고, 프로세스별 설계평가 파일(RCM + 설계평가 + 요청증빙 + 통제별 시트 + 증빙)을 만듭니다.</div>
   </div>
-  <div class="stage">v1.0</div>
+  <div class="stage">v1.1</div>
 </header>
 
 <section class="card">
@@ -134,7 +134,8 @@
       <button class="ghost" id="saveProj">작성중인 내용 저장</button>
       <button class="ghost" id="loadProjBtn">저장한 작업 불러오기</button>
       <input type="file" id="loadProj" accept=".json" class="hidden">
-      <span class="samp" style="max-width:none">증빙 캡쳐까지 함께 저장됩니다. 브라우저를 닫기 전에 저장하세요.</span>
+      <label class="f" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="saveRaw" checked> 원본 RCM 파일 포함</label>
+      <span class="samp" style="max-width:none">증빙 캡쳐까지 함께 저장됩니다. 원본을 빼면 파일이 작아지지만, 복원 후 "원본 그대로" 내보내기는 RCM을 다시 올려야 합니다.</span>
     </div>
   </div>
 </section>
@@ -226,6 +227,7 @@
     <button class="ghost" id="reqRules">판정 규칙·문구 편집</button>
     <button class="ghost" id="reqRegen">현재 프로세스 재생성</button>
     <button class="ghost" id="reqRegenAll" title="직접 고친 문구까지 모두 지우고 다시 생성">전체 초기화 후 재생성</button>
+    <button id="reqExportAll">전 프로세스 통합 엑셀</button>
   </div>
   <div class="rules hidden" id="rulesbox"></div>
   <div style="overflow-x:auto;border-top:1px solid var(--rule);margin-top:10px">
@@ -247,10 +249,11 @@
     <div class="row" style="margin-top:14px">
       <label class="f">RCM 시트 방식
         <select id="rcmmode" style="width:330px">
-          <option value="rebuild">새로 그리기 — 해당 프로세스 행만 (서식 없음)</option>
           <option value="original">원본 파일 그대로 — 전체 프로세스, 뒤에 시트만 추가</option>
+          <option value="rebuild" hidden>새로 그리기 — 값만 (.xls·원본 없음 전용)</option>
           <option value="origfilter">원본 파일 그대로 — 다른 프로세스 행은 숨김</option>
         </select></label>
+      <label class="f" style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px"><input type="checkbox" id="fxtext" checked> 상세내역·속성 문구도 수식으로</label>
       <label class="f">RCM 값 연결 방식
         <select id="fxmode" style="width:330px">
           <option value="lookup">통제번호로 조회 — INDEX/MATCH (권장)</option>
@@ -262,7 +265,7 @@
     </div>
     <div class="samp" style="max-width:none;margin-top:8px" id="fxhelp"></div>
     <div class="samp" style="max-width:none;margin-top:4px" id="rcmhelp"></div>
-    <div class="samp" style="max-width:none;margin-top:4px">설계평가 상세내역·속성 문구도 RCM 값을 참조하는 <b>수식</b>으로 나갑니다(직접 고친 칸과 "값으로만"은 텍스트). 조사(은/는·로/으로)는 UNICODE 함수로 판별하므로 Excel 2013 이상에서 열어야 합니다.</div>
+    <div class="samp" style="max-width:none;margin-top:4px">「문구도 수식으로」를 켜면 상세내역·속성 문구가 RCM 값을 참조하는 수식으로 나갑니다(직접 고친 칸은 텍스트). 수식이 길어 회사가 문구를 직접 다듬을 파일이면 끄는 편이 낫습니다. 조사(은/는·로/으로)는 UNICODE 함수로 판별하므로 Excel 2013 이상 필요.</div>
   </div>
 </section>
 </div>
@@ -332,9 +335,6 @@ const FIELDS = [
   pos:[[/자동.?수동|수동.?자동|manual.?auto|auto.?manual/,16],[/자동화(여부|수준|구분)|automation/,13],[/통제(구분|방식|형태|성격)/,7]],
   neg:[[/예방|적발|prevent|detect/,14],[/it.?의존.?여부만|핵심/,6]],
   val:v=>/^(자동|수동|반자동|it.?의존|itdm|it.?dependent|manual|automat(ed|ic)|auto|system)/i.test(v)?5:0},
- {g:'참고', key:'subProcess', label:'하위 프로세스 코드', opt:true,
-  pos:[[/하위프로세스(번호|코드|no|code)/,14],[/sub.?process(no|code)/,10]],
-  neg:[[/명칭|이름|name/,14]], val:v=>/^[A-Za-z가-힣]{1,12}[0-9]{1,3}$/.test(v)?3:0},
 ];
 const RCM_KEYS=FIELDS.map(f=>f.key);
 
@@ -364,7 +364,7 @@ let OPT_PROG=['(0) 인터뷰 미수행','(1) Pending(자료미입수)','(2) Pend
 let OPT_CONC=['Effective','Ineffective','Pending'];
 const DEF_PROGRESS='(1) Pending(자료미입수)', DEF_CONCL='Pending';
 const MAX_IMG_W=760;
-let FX_MODE='lookup';
+let FX_MODE='lookup',FX_TEXT=true;
 const XL_MAX_ROW_PT=380;                     // 엑셀 행 높이 한계(409pt) 안쪽
 const COLPX=[202,236,635];                   // B·C·D 열 픽셀폭 (아래 열너비와 짝)
 function colFrac(W){                          // 가로 W px 가 끝나는 열 위치(소수 허용)
@@ -403,8 +403,7 @@ const DEF_REQ={
   popSkipAuto:'생략 — 자동통제',
   sDoc:'샘플 1건에 대한 아래 증빙(결재·승인자 및 일자 확인 가능한 형태)\n{증빙목록}',
   sAuth:'{권한명} 권한 조회 후 권한보유계정 화면 캡쳐 및 엑셀 추출\n+ 권한보유자 정보(성명, 조직, 직무, 권한보유 적절성 여부)',
-  sConfig:'{설정항목} 설정 화면 캡쳐(설정값 확인 가능) 및 설정변경 권한 조회 후 권한보유계정 화면 캡쳐·엑셀 추출\n+ 권한보유자 정보(성명, 조직, 직무, 권한보유 적절성 여부)',
-  sAuto:'시스템 자동수행 결과 화면 캡쳐(입력 → 처리결과 확인 가능) 및 관련 산출물\n{증빙목록}'
+  sConfig:'{설정항목} 설정 화면 캡쳐(설정값 확인 가능) 및 설정변경 권한 조회 후 권한보유계정 화면 캡쳐·엑셀 추출\n+ 권한보유자 정보(성명, 조직, 직무, 권한보유 적절성 여부)'
 };
 const REQ_META=[
   ['skipFreq','모집단 생략 — 주기성 판정 주기 키워드(쉼표 구분)',1],
@@ -418,11 +417,10 @@ const REQ_META=[
   ['popSkipAuto','모집단 요청 — 자동통제',1],
   ['sDoc','샘플증빙 — 문서형(수동)',3],
   ['sAuth','샘플증빙 — 권한형(자동)',3],
-  ['sConfig','샘플증빙 — 설정형(자동)',3],
-  ['sAuto','샘플증빙 — 자동-기타',3]
+  ['sConfig','샘플증빙 — 설정형(자동)',3]
 ];
 let REQ=Object.assign({},DEF_REQ);
-const EV_TYPES=[['doc','문서형(수동)'],['query','조회형(수동)'],['auth','권한형(자동)'],['config','설정형(자동)'],['auto','자동-기타']];
+const EV_TYPES=[['doc','문서형(수동)'],['query','조회형(수동)'],['auth','권한형(자동)'],['config','설정형(자동)']];
 const evLabel=k=>(EV_TYPES.find(x=>x[0]===k)||[,k])[1];
 const kws=str=>String(str||'').split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
 const hasKw=(txt,list)=>{const t=String(txt||'').toLowerCase();return kws(list).some(k=>t.includes(k.toLowerCase()))};
@@ -433,11 +431,9 @@ function isAuto(o){
 }
 const isPeriodic=o=>hasKw(shortFreq(o.frequency||''),REQ.skipFreq);
 function classifyEv(o){
-  if(isAuto(o)){
-    const t=o.controlDesc+' '+o.controlName+' '+o.testProc;
-    if(hasKw(t,REQ.kwAuth))return 'auth';
-    if(hasKw(t,REQ.kwConfig))return 'config';
-    return 'auto';
+  if(isAuto(o)){                               // 유형 판정은 통제기술·통제명만 (테스트절차 제외 — 오탐 방지)
+    const t=o.controlDesc+' '+o.controlName;
+    return hasKw(t,REQ.kwAuth)?'auth':'config';
   }
   return hasKw(o.population+' '+o.testProc+' '+o.controlDesc,REQ.kwQuery)?'query':'doc';
 }
@@ -467,21 +463,23 @@ function reqTokens(o){
 function genReq(o,force){
   o.edited=o.edited||{};
   if(force){delete o.edited.evType;delete o.edited.reqPop;delete o.edited.reqSample}
-  if(!o.edited.evType)o.evType=classifyEv(o);
-  const v=reqTokens(o), auto=['auth','config','auto'].includes(o.evType);
+  if(o.evType==='auto')o.evType='config';
+  if(!o.edited.evType||!EV_TYPES.some(x=>x[0]===o.evType))o.evType=classifyEv(o);
+  const v=reqTokens(o), auto=['auth','config'].includes(o.evType);
   if(!o.edited.reqPop){
     o.reqPop=auto?fill(REQ.popSkipAuto,v):isPeriodic(o)?fill(REQ.popSkipPeriodic,v):fill(o.evType==='query'?REQ.pop:REQ.popDoc,v);
     if(!clean(o.population))o.reqPop=o.reqPop.replace(/\n?[^\n]*모집단:\s*$/,'').trim();
   }
   if(!o.edited.reqSample){
-    o.reqSample=fill({doc:REQ.sDoc,query:REQ.sDoc,auth:REQ.sAuth,config:REQ.sConfig,auto:REQ.sAuto}[o.evType]||REQ.sDoc,v);
+    o.reqSample=fill({doc:REQ.sDoc,query:REQ.sDoc,auth:REQ.sAuth,config:REQ.sConfig}[o.evType]||REQ.sDoc,v);
   }
   if(o.reqNote==null)o.reqNote='';
+  if(!o.recv)o.recv=(auto||/^생략/.test(o.reqPop||''))&&!(o.reqSample||'').trim()?'해당없음':'미입수';
 }
 let WB=null,GRID=[],FILLED=[],MERGES=[],NCOL=0,HDR=0,DSTART=0,DEND=0,MAP={},LABEL={},PROCS=[],CURPROC=null,SEL=0;
 let RAW_BUF=null,RAW_NAME='',SHEET_NAME='',RAW_XLSX=false;   // 원본 파일(ExcelJS 로드용)
 let USE={},EXTRA=[];                                          // USE[key]===false → 사용 안 함 / EXTRA: 사용자 추가 항목
-let RCM_MODE='rebuild';
+let RCM_MODE='original';
 const DEF_PATTERN='{회사}_{년월}_설계평가_{프로세스코드}_{프로세스명}_{버전}';
 let FILEMETA={company:'',period:'',ver:'',pattern:DEF_PATTERN};
 const used=k=>USE[k]!==false;
@@ -671,7 +669,7 @@ function renderMap(){
     const sample=c==null?(f.derive&&MAP.testProc!=null?extractCompleteness(clean(GRID[DSTART][MAP.testProc])):''):(sampleVals(c,1)[0]||'');
     const x=f.extra?EXTRA.find(e=>e.key===f.key):null;
     const place=x?'<select data-pl="'+f.key+'" style="width:100%">'+PLACES.map(([k,l])=>'<option value="'+k+'"'+(x.place===k?' selected':'')+'>'+esc(l)+'</option>').join('')+'</select>'
-      :'<span class="samp">'+esc(f.key==='processName'?'파일명':f.key==='autoManual'?'요청증빙 판정':f.key==='subProcess'?'RCM 시트':['processCode','controlCode','controlName','keyControl','frequency','controlRisk','controlType'].includes(f.key)?'통제 시트 2~8행':f.key==='riskName'?'속성2 문구':'통제 시트 16~21행')+'</span>';
+      :'<span class="samp">'+esc(f.key==='processName'?'파일명':f.key==='autoManual'?'요청증빙 판정':['processCode','controlCode','controlName','keyControl','frequency','controlRisk','controlType'].includes(f.key)?'통제 시트 2~8행':f.key==='riskName'?'속성2 문구':'통제 시트 16~21행')+'</span>';
     const tr=document.createElement('tr');if(!on)tr.style.opacity='.55';
     tr.innerHTML='<td style="text-align:center"><input type="checkbox" data-u="'+f.key+'"'+(on?' checked':'')+(f.key==='controlCode'||f.key==='processCode'?' disabled title="파일 분리·시트명 기준이라 끌 수 없습니다"':'')+'></td>'+
       '<td class="fieldname">'+(x?'<input type="text" data-xl="'+f.key+'" value="'+esc(x.label)+'" style="width:78%" placeholder="항목 이름"> <button class="ghost tiny" data-xd="'+f.key+'" title="항목 삭제">✕</button>':esc(f.label)+(f.opt?'':' <span class="req">*</span>'))+
@@ -799,7 +797,7 @@ document.getElementById('merge').onclick=()=>{
       o.detail=prev.detail;
       ['evType','reqPop','reqSample'].concat(FIELDS.map(f=>f.key)).forEach(k=>{
         if(prev.edited&&prev.edited[k])o[k]=prev[k]});
-      o.reqNote=prev.reqNote||'';
+      o.reqNote=prev.reqNote||'';o.recv=prev.recv;
       delete old[o.controlCode];upd++;
     }else{o.edited={};o.attrs=[];o.evidence=[];o.progress=DEF_PROGRESS;o.conclusion=DEF_CONCL;add++}
     genTexts(o);
@@ -1038,12 +1036,12 @@ function renderReq(){
   document.getElementById('reqsum').textContent=EV_TYPES.filter(([k])=>cnt[k]).map(([k,l])=>l+' '+cnt[k]).join(' · ')+
     ' · 모집단 생략 '+p.ctrls.filter(o=>/^생략/.test(o.reqPop||'')).length+'건';
   document.getElementById('reqhead').innerHTML=
-    ['#','통제활동 코드','통제활동명','통제활동 기술','자동/수동 · 주기','증빙 유형','모집단 요청증빙','샘플 요청증빙','비고']
-    .map((h,i)=>'<th style="width:'+[30,110,150,260,105,120,230,260,120][i]+'px">'+esc(h)+'</th>').join('');
+    ['#','통제활동 코드','통제활동명','통제활동 기술','자동/수동 · 주기','증빙 유형','모집단 요청증빙','샘플 요청증빙','비고','입수']
+    .map((h,i)=>'<th style="width:'+[30,110,150,260,105,120,230,260,120,96][i]+'px">'+esc(h)+'</th>').join('');
   const tb=document.getElementById('reqrows');tb.innerHTML='';
   p.ctrls.forEach((o,i)=>{
     if(o.evType==null)genReq(o);
-    const auto=['auth','config','auto'].includes(o.evType);
+    const auto=['auth','config'].includes(o.evType);
     const tr=document.createElement('tr');
     tr.innerHTML='<td>'+(i+1)+'</td>'+
       '<td><span class="col-chip">'+esc(o.controlCode)+'</span>'+(o.removed?'<br><span class="badge b-bad">삭제됨</span>':'')+'</td>'+
@@ -1054,7 +1052,8 @@ function renderReq(){
         (o.edited.evType?'<div class="samp" style="font-size:10.5px">직접 지정</div>':'')+'</td>'+
       '<td><textarea data-rp="'+i+'" rows="4">'+esc(o.reqPop||'')+'</textarea></td>'+
       '<td><textarea data-rs="'+i+'" rows="4">'+esc(o.reqSample||'')+'</textarea></td>'+
-      '<td><textarea data-rn="'+i+'" rows="4" placeholder="요청 대상·특이사항">'+esc(o.reqNote||'')+'</textarea></td>';
+      '<td><textarea data-rn="'+i+'" rows="4" placeholder="요청 대상·특이사항">'+esc(o.reqNote||'')+'</textarea></td>'+
+      '<td>'+selHTML(OPT_RECV,o.recv||'미입수','data-rv="'+i+'"')+'</td>';
     tb.appendChild(tr);
   });
   tb.querySelectorAll('.more').forEach(el=>el.onclick=e=>{const d=tb.querySelector('.desc[data-d="'+e.target.dataset.m+'"]');d.classList.toggle('open');e.target.textContent=d.classList.contains('open')?'접기':'전체 보기'});
@@ -1063,11 +1062,18 @@ function renderReq(){
   tb.querySelectorAll('textarea[data-rp]').forEach(el=>el.oninput=e=>{const o=p.ctrls[+e.target.dataset.rp];o.reqPop=e.target.value;o.edited.reqPop=1});
   tb.querySelectorAll('textarea[data-rs]').forEach(el=>el.oninput=e=>{const o=p.ctrls[+e.target.dataset.rs];o.reqSample=e.target.value;o.edited.reqSample=1});
   tb.querySelectorAll('textarea[data-rn]').forEach(el=>el.oninput=e=>{p.ctrls[+e.target.dataset.rn].reqNote=e.target.value});
+  tb.querySelectorAll('select[data-rv]').forEach(el=>el.onchange=e=>{const o=p.ctrls[+e.target.dataset.rv];o.recv=e.target.value;
+    // 입수 → 진행현황이 (0)·(1) 단계면 "(2) 자료입수"로 올림 / 미입수로 되돌리면 (2)였을 때만 (1)로
+    const i2=OPT_PROG.find(x=>/^\(2\)/.test(x)),i1=OPT_PROG.find(x=>/^\(1\)/.test(x));
+    if(o.recv==='입수'&&/^\((0|1)\)/.test(o.progress||'')&&i2)o.progress=i2;
+    else if(o.recv==='미입수'&&/^\(2\)/.test(o.progress||'')&&i1)o.progress=i1;
+    renderEval()});
 }
+const OPT_RECV=['미입수','입수','부분입수','해당없음'];
 function renderRules(){
   const box=document.getElementById('rulesbox');box.innerHTML='';
   const help=document.createElement('div');help.className='full samp';help.style.maxWidth='none';
-  help.innerHTML='판정 순서: <b>자동통제</b>(자동/수동 열 → 없으면 키워드) → 권한형/설정형/자동-기타 · <b>수동통제</b> → 조회형/문서형. 모집단은 자동통제·주기성통제면 생략.<br>'+
+  help.innerHTML='판정 순서: <b>자동통제</b>(자동/수동 열 → 없으면 키워드) → 권한형/설정형(통제기술·통제명 기준) · <b>수동통제</b> → 조회형/문서형. 모집단은 자동통제·주기성통제면 생략.<br>'+
     '문구에 쓸 수 있는 값: <b>{모집단}</b> <b>{통제주기}</b> <b>{관련문서}</b> <b>{증빙목록}</b>(관련문서 + 테스트절차에서 추출한 문서명) <b>{권한명}</b> <b>{설정항목}</b> <b>{통제활동명}</b> <b>{통제책임자}</b> <b>{자동수동}</b> 등 · 조사 자동 처리 동일';
   box.appendChild(help);
   REQ_META.forEach(([k,lab,rows])=>{
@@ -1080,6 +1086,32 @@ function renderRules(){
   box.querySelectorAll('textarea[data-r]').forEach(t=>t.onchange=e=>{REQ[e.target.dataset.r]=e.target.value});
   document.getElementById('reqDefault').onclick=()=>{if(confirm('판정 규칙과 문구를 모두 기본값으로 되돌릴까요?')){REQ=Object.assign({},DEF_REQ);renderRules()}};
 }
+document.getElementById('reqExportAll').onclick=async()=>{
+  if(!PROCS.length)return;
+  const wb=new ExcelJS.Workbook();
+  const rq=wb.addWorksheet('요청증빙',{views:[{state:'frozen',ySplit:5}]});
+  rq.getCell('B2').value='설계평가 요청증빙 목록 — 전체 프로세스'+(FILEMETA.company?' · '+FILEMETA.company:'')+(FILEMETA.period?' · '+FILEMETA.period:'');
+  rq.getCell('B2').font={name:'맑은 고딕',size:13,bold:true};
+  rq.getCell('B3').value='모집단: 자동통제·주기성통제는 생략 / 조회형은 조회조건·조회결과 전체화면 캡쳐 + 엑셀 추출 · 샘플증빙: 테스트절차·관련문서 기준 / 권한·설정형 자동통제는 권한보유계정 캡쳐·엑셀 + 권한보유자 정보';
+  rq.getCell('B3').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
+  const RH=['No','프로세스','통제활동 코드','통제활동명','통제활동 기술','통제부서','통제책임자','자동/수동','통제주기','증빙 유형','모집단 요청증빙','샘플 요청증빙','비고','입수 여부','입수일'];
+  RH.forEach((h,i)=>{const c=rq.getRow(5).getCell(2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
+  let n=0;
+  PROCS.forEach(p=>p.ctrls.forEach(o=>{
+    if(o.evType==null)genReq(o);
+    const r=rq.getRow(6+n);
+    [n+1,p.code+(p.name?' '+p.name:''),o.controlCode+(o.removed?' [삭제됨]':''),o.controlName,o.controlDesc,o.controlDept,o.controlOwner,
+     o.autoManual||(isAuto(o)?'자동(추정)':'수동(추정)'),shortFreq(o.frequency||''),evLabel(o.evType),o.reqPop||'',o.reqSample||'',o.reqNote||'',o.recv||'미입수','']
+     .forEach((v,k)=>{const c=r.getCell(2+k);c.value=v;styleVal(c)});
+    r.getCell(2).alignment={vertical:'top',horizontal:'center'};
+    r.getCell(15).dataValidation=dvList(OPT_RECV);r.getCell(16).numFmt='yyyy-mm-dd';n++;
+  }));
+  [5,14,16,26,52,12,10,11,10,13,40,48,22,10,11].forEach((w,i)=>rq.getColumn(2+i).width=w);rq.getColumn(1).width=3;
+  if(n)rq.autoFilter={from:{row:5,column:2},to:{row:5+n,column:1+RH.length}};
+  const buf=await wb.xlsx.writeBuffer();
+  const nm=fmtFileName({code:'요청증빙',name:''}).replace(/설계평가_/,'');
+  dl(nm,new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+};
 document.getElementById('reqRules').onclick=()=>{const b=document.getElementById('rulesbox');b.classList.toggle('hidden');if(!b.classList.contains('hidden'))renderRules()};
 document.getElementById('reqRegen').onclick=()=>{const p=curProc();if(!p)return;p.ctrls.forEach(o=>genReq(o));renderReq()};
 document.getElementById('reqRegenAll').onclick=()=>{
@@ -1094,7 +1126,8 @@ document.getElementById('saveProj').onclick=()=>{
   const o={version:6,savedAt:new Date().toISOString(),templates:TMPL,reqRules:REQ,optProg:OPT_PROG,optConc:OPT_CONC,
     labels:LABEL,mapping:{},headerRow:HDR+1,dataStart:DSTART+1,dataEnd:DEND+1,
     rcm:{grid:GRID,merges:MERGES,ncol:NCOL},use:USE,extra:EXTRA,fileMeta:FILEMETA,rcmMode:RCM_MODE,
-    rawFile:RAW_BUF?{name:RAW_NAME,sheet:SHEET_NAME,xlsx:RAW_XLSX,b64:bufToB64(RAW_BUF)}:null,
+    rawFile:(RAW_BUF&&document.getElementById('saveRaw').checked)?{name:RAW_NAME,sheet:SHEET_NAME,xlsx:RAW_XLSX,b64:bufToB64(RAW_BUF)}:null,
+    fxText:FX_TEXT,fxMode:FX_MODE,
     procs:PROCS.map(p=>({code:p.code,name:p.name,ctrls:p.ctrls}))};
   FIELDS.forEach(f=>{const c=MAP[f.key];o.mapping[f.key]=c==null?null:{col:c,header:headText(c).leaf,label:labelOf(f)}});
   dl('설계평가_작업저장_'+new Date().toISOString().slice(0,10)+'.json',
@@ -1112,6 +1145,8 @@ document.getElementById('loadProj').onchange=e=>{
     syncExtraFields();
     if(m.fileMeta)FILEMETA=Object.assign({pattern:DEF_PATTERN},m.fileMeta);syncFileMeta();
     if(m.rcmMode)RCM_MODE=m.rcmMode;
+    if(m.fxText!=null){FX_TEXT=!!m.fxText;document.getElementById('fxtext').checked=FX_TEXT}
+    if(m.fxMode){FX_MODE=m.fxMode;document.getElementById('fxmode').value=FX_MODE;setFxHelp()}
     if(m.rawFile&&m.rawFile.b64){try{RAW_BUF=b64ToBuf(m.rawFile.b64);RAW_NAME=m.rawFile.name||'';SHEET_NAME=m.rawFile.sheet||'';RAW_XLSX=!!m.rawFile.xlsx}catch(e){RAW_BUF=null}}
     document.getElementById('rcmmode').value=RCM_MODE;
     if(m.optProg&&m.optProg.length)OPT_PROG=m.optProg;
@@ -1164,14 +1199,16 @@ const fileNameOf=p=>fmtFileName(p);
 function syncFileMeta(){fmCompany.value=FILEMETA.company||'';fmPeriod.value=FILEMETA.period||'';fmVer.value=FILEMETA.ver||'';fmPattern.value=FILEMETA.pattern||DEF_PATTERN}
 syncFileMeta();
 const RCM_HELP={
-  rebuild:'값만 옮겨 새 RCM 시트를 그립니다. 원본 서식·병합은 유지되지 않습니다. (.xls 파일도 가능)',
+  rebuild:'원본 .xlsx가 없어 값만 옮긴 RCM 시트를 새로 그립니다(서식·병합 없음). .xlsx 원본을 올리면 원본 그대로 방식이 활성화됩니다.',
   original:'업로드한 .xlsx를 그대로 열고 뒤에 설계평가·요청증빙·통제 시트만 붙입니다. 서식·병합·다른 시트가 모두 유지되며 모든 프로세스 행이 들어갑니다. 수식은 원본 시트 "'+'{S}'+'"를 참조합니다.',
   origfilter:'원본 .xlsx를 그대로 열되 RCM 시트에서 다른 프로세스의 행을 숨김(그룹) 처리합니다. 서식·병합이 유지되고 열면 해당 프로세스만 보입니다. 숨긴 행은 그룹 펼침으로 볼 수 있습니다.'};
 function setRcmHelp(){
   const sel=document.getElementById('rcmmode'),h=document.getElementById('rcmhelp');
   const ok=RAW_BUF&&RAW_XLSX;
-  [...sel.options].forEach(op=>{if(op.value!=='rebuild')op.disabled=!ok});
-  if(!ok&&RCM_MODE!=='rebuild'){RCM_MODE='rebuild';sel.value='rebuild'}
+  [...sel.options].forEach(op=>{if(op.value!=='rebuild'){op.disabled=!ok;op.hidden=!ok}else{op.hidden=ok;op.disabled=ok}});
+  if(!ok&&RCM_MODE!=='rebuild'){RCM_MODE='rebuild'}
+  if(ok&&RCM_MODE==='rebuild'){RCM_MODE='original'}
+  sel.value=RCM_MODE;
   h.innerHTML=esc(RCM_HELP[RCM_MODE].replace('{S}',SHEET_NAME))+(ok?'':' <b style="color:#9B2C2C">'+(RAW_BUF?'원본이 .xls 형식이어서 "원본 그대로" 방식은 쓸 수 없습니다. .xlsx로 저장해 다시 올리세요.':'원본 파일이 없어(작업 파일에서 복원됨) "원본 그대로" 방식은 쓸 수 없습니다. RCM 파일을 다시 올리면 됩니다.')+'</b>');
 }
 document.getElementById('rcmmode').onchange=e=>{RCM_MODE=e.target.value;setRcmHelp()};
@@ -1181,6 +1218,7 @@ const FX_HELP={
   value:'수식 없이 값만 넣습니다. RCM 시트를 고쳐도 반영되지 않습니다.'};
 function setFxHelp(){const h=document.getElementById('fxhelp');if(h)h.textContent=FX_HELP[FX_MODE]}
 document.getElementById('fxmode').onchange=e=>{FX_MODE=e.target.value;setFxHelp()};
+document.getElementById('fxtext').onchange=e=>{FX_TEXT=e.target.checked};
 setFxHelp();
 document.getElementById('expAll').onclick=async()=>{
   const m=document.getElementById('expmsg');
@@ -1244,17 +1282,19 @@ async function exportProc(p){
   const RCMS=useOrig?qs(SHEET_NAME):qs('RCM');
   const rcmRow=new Map();                     // 통제 → RCM 시트의 행번호
   const keyCol=MAP.controlCode!=null?colName(MAP.controlCode):null;
+  const RNG=[DSTART+1,DEND+1+(useOrig?300:0)];  // 조회 범위: 원본 모드는 뒤에 행이 추가될 여유 300행
   const refOf=(o,anchor)=>key=>{              // RCM 값 참조식 (없으면 null)
     const r=rcmRow.get(o),c=MAP[key];
     if(FX_MODE==='value'||r==null||c==null||(o.edited&&o.edited[key]))return null;
+    if(useOrig&&o.srcRow!=null&&GRID[o.srcRow]&&clean(GRID[o.srcRow][c])===''&&clean((FILLED[o.srcRow]||[])[c])!=='')return null;   // 병합으로 비어 있는 원본셀 → 값으로
     if(key==='controlCode')return anchor||'$D$3';
     const col=colName(c);
-    if(FX_MODE==='lookup'&&keyCol)return 'INDEX('+RCMS+'!$'+col+':$'+col+',MATCH('+(anchor||'$D$3')+','+RCMS+'!$'+keyCol+':$'+keyCol+',0))';
+    if(FX_MODE==='lookup'&&keyCol)return 'INDEX('+RCMS+'!$'+col+'$'+RNG[0]+':$'+col+'$'+RNG[1]+',MATCH('+(anchor||'$D$3')+','+RCMS+'!$'+keyCol+'$'+RNG[0]+':$'+keyCol+'$'+RNG[1]+',0))';
     return RCMS+'!$'+col+'$'+r;
   };
   const fx=(o,key,val,anchor)=>{const r=refOf(o,anchor)(key);return r?{formula:r,result:(val===''||val==null)?null:val}:val};
   const fxT=(o,tmplKey,val,editedKey)=>{
-    if(FX_MODE==='value'||(o.edited&&o.edited[editedKey])||rcmRow.get(o)==null)return val;
+    if(!FX_TEXT||FX_MODE==='value'||(o.edited&&o.edited[editedKey])||rcmRow.get(o)==null)return val;
     const f=fxText(o,TMPL[tmplKey],refOf(o));return f?{formula:f,result:val||null}:val;
   };
   const dropSheet=n=>{const ex=wb.getWorksheet(n);if(ex)wb.removeWorksheet(ex.id)};
@@ -1288,11 +1328,12 @@ async function exportProc(p){
     }
     if(hasRCM) MERGES.forEach(m=>{if(m.e.r<DSTART){try{rcm.mergeCells(m.s.r+1,m.s.c+1,m.e.r+1,m.e.c+1)}catch(e){}}});
     const rcmRows=hasRCM?p.ctrls.filter(o=>o.srcRow!=null&&!o.removed&&GRID[o.srcRow]):[];
+    RNG[1]=Math.max(RNG[0],DSTART+rcmRows.length);
     rcmRows.forEach((o,i)=>{
       rcmRow.set(o,DSTART+1+i);
       const row=rcm.getRow(DSTART+1+i);
       for(let c=0;c<NCOL;c++){
-        const v=GRID[o.srcRow][c]; if(v==null||v==='')continue;
+        const v=(FILLED[o.srcRow]||GRID[o.srcRow])[c]; if(v==null||v==='')continue;
         const cell=row.getCell(c+1);
         const d=ymd(v);
         if(d)cell.value=d;
@@ -1348,12 +1389,11 @@ async function exportProc(p){
   rq.getCell('B3').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
   const RH=['No','통제활동 코드','통제활동명','통제활동 기술','자동/수동','통제주기','증빙 유형','모집단 요청증빙','샘플 요청증빙','비고','입수 여부','입수일'];
   RH.forEach((h,i)=>{const c=rq.getRow(5).getCell(2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
-  const OPT_RECV=['미입수','입수','부분입수','해당없음'];
   p.ctrls.forEach((o,i)=>{
     if(o.evType==null)genReq(o);
     const r=rq.getRow(6+i),anc='$C'+(6+i);
     const vals=[i+1,null,fx(o,'controlName',o.controlName,anc),fx(o,'controlDesc',o.controlDesc,anc),o.autoManual||(isAuto(o)?'자동(추정)':'수동(추정)'),shortFreq(o.frequency||''),
-      evLabel(o.evType),o.reqPop||'',o.reqSample||'',o.reqNote||'',/^생략/.test(o.reqPop||'')&&!(o.reqSample||'').trim()?'해당없음':'미입수',''];
+      evLabel(o.evType),o.reqPop||'',o.reqSample||'',o.reqNote||'',o.recv||'미입수',''];
     vals.forEach((v,k)=>{const c=r.getCell(2+k);if(k===1){c.value={text:o.controlCode,hyperlink:"#"+qs(o.controlCode.substring(0,31))+"!A1"};
         c.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};c.alignment={vertical:'top'};c.border=BORDER}
       else{c.value=v;styleVal(c)}});
