@@ -120,7 +120,7 @@
     <h1>설계/운영평가 템플릿 생성기</h1>
     <div class="sub">RCM 열을 자동 인식하고, 프로세스별 설계평가(TOD) 또는 운영평가(TOE) 파일을 만듭니다.</div>
   </div>
-  <div class="stage">v2.4</div>
+  <div class="stage">v2.5</div>
 </header>
 
 <section class="card">
@@ -2580,6 +2580,47 @@ async function exportProcTOEYear(p){
     ir.getCell(11).dataValidation=dvList(OPT_TPROG);[12,13,14].forEach(cc=>ir.getCell(cc).dataValidation=dvList(OPT_TOE_RESULT));
   });
   [18,40,10,14,12,10,9,14,18,20,12,12,12,18].forEach((w,i)=>idx.getColumn(2+i).width=w);idx.getColumn(1).width=3;
+
+  /* 샘플요청 시트 — 선정된 샘플을 회사에 전달하기 위한 목록(수식, 모집단을 붙이면 자동 채워짐) */
+  {
+    dropSheet('샘플요청');
+    const sq=wb.addWorksheet('샘플요청',{views:[{state:'frozen',ySplit:6}]});
+    try{const ws0=wb.getWorksheet('운영평가');sq.orderNo=ws0.orderNo+0.5}catch(e){}
+    sq.getCell('B2').value='샘플 증빙 요청 목록 — '+p.code+(p.name?' '+p.name:'')+(FILEMETA.company?' · '+FILEMETA.company:'');sq.getCell('B2').font={name:'맑은 고딕',size:13,bold:true};
+    sq.getCell('B3').value='차수 표시';styleLabel(sq.getCell('B3'));const fc=sq.getCell('C3');fc.value='전체';styleVal(fc);fc.dataValidation=dvList(['전체','1차','2차']);fc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
+    sq.getCell('D3').value='모집단을 붙이면 선정된 샘플이 자동으로 나타납니다. 회사에 보낼 때: 「차수」열 필터에서 (비어 있음) 해제 → 보이는 행만 복사하거나 시트를 값으로 붙여넣기';sq.getCell('D3').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
+    const labels=[];p.ctrls.forEach(o=>evColsOf(o).forEach(c=>{if(!labels.includes(c.label))labels.push(c.label)}));const LB=labels.slice(0,8);
+    const H=['통제활동 코드','통제활동명','통제수행부서','담당자','차수','샘플No'].concat(LB).concat(['요청 증빙','입수']);
+    H.forEach((h,i)=>{const c=sq.getRow(6).getCell(2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
+    const FLT=(rd)=>'OR($C$3="전체",$C$3="'+rd+'")';
+    let r=7;
+    p.ctrls.forEach(o=>{
+      const c=toeCalc(o),t=toeOf(o),pn=popRef[o.controlCode],PQ=pn?"'"+pn.replace(/'/g,"''")+"'":null,pref=perRef[c.cls+'|'+c.lv];
+      const ev=evColsOf(o).slice(0,6);const colOf=lab=>{const i=LB.indexOf(lab);return i<0?null:8+i};
+      const dateIdx=(()=>{let d=ev.findIndex(x=>/일자|날짜|기간|date|월|주기/i.test((x.src||'')+' '+(x.label||'')));return d<0?0:d})();
+      const base=(row,rd,noExpr)=>{const cells=[o.controlCode,o.controlName,o.controlDept||'',o.controlOwner||''];cells.forEach((v,k)=>{const cc=sq.getCell(row,2+k);cc.value={formula:'IF('+noExpr+'="","","'+String(v).replace(/"/g,'""')+'")'};styleVal(cc)});
+        const rc=sq.getCell(row,6);rc.value={formula:'IF('+noExpr+'="","","'+rd+'")'};styleVal(rc);rc.alignment={horizontal:'center'};
+        const nc=sq.getCell(row,7);nc.value={formula:noExpr};styleVal(nc);nc.alignment={horizontal:'center'};
+        for(let k=0;k<LB.length;k++){const cc=sq.getCell(row,8+k);cc.value='';styleVal(cc)}
+        const rq=sq.getCell(row,8+LB.length);rq.value={formula:'IF('+noExpr+'="","","'+String(o.reqSample||'').replace(/"/g,'""').replace(/\n/g,'"&CHAR(10)&"')+'")'};styleVal(rq);
+        const rv=sq.getCell(row,9+LB.length);rv.value='';styleVal(rv);rv.dataValidation=dvList(['','입수','미입수','부분입수'])};
+      if(c.auto){const noE='IF('+FLT('1차')+',"N/A","")';base(r,'1차',noE);const cc=sq.getCell(r,8);cc.value={formula:'IF('+noE+'="","","설정/권한 화면 캡쳐 (모집단 N/A)")'};styleVal(cc);r++;return}
+      ['1차','2차'].forEach(rd=>{
+        const is1=rd==='1차';const N=PQ?60:Math.max(1,c.annual||1);
+        for(let i=1;i<=N;i++){
+          let noE;
+          if(PQ){const act=is1?PQ+'!$D$9':PQ+'!$D$10';noE='IF(AND('+FLT(rd)+','+i+'<='+act+'),'+i+',"")';base(r,rd,noE);
+            ev.forEach((cdef,j)=>{const col=colOf(cdef.label);if(col==null)return;const cc=sq.getCell(r,col);cc.value={formula:'IF('+noE+'="","",'+popFx(pn,i,clean(cdef.src)||clean(cdef.label),is1?'A':'B')+')'};styleVal(cc);if(j===dateIdx)cc.numFmt='yyyy-mm-dd'})}
+          else if(pref){const nref=is1?pref.n1:pref.n2,noRef=is1?pref.no1:pref.no2;noE='IF(AND('+FLT(rd)+','+i+'<='+nref+'),'+i+',"")';base(r,rd,noE);
+            const cdef=ev[dateIdx]||ev[0];const col=cdef?colOf(cdef.label):8;if(col!=null){const cc=sq.getCell(r,col);cc.value={formula:'IF('+noE+'="","",IFERROR(INDEX('+pref.lab+',MATCH('+i+','+noRef+',0)),""))'};styleVal(cc)}}
+          else{noE='IF('+FLT(rd)+','+i+',"")';base(r,rd,noE)}
+          r++}
+      });
+    });
+    [16,30,12,10,7,7].concat(LB.map(()=>16)).concat([50,8]).forEach((w,i)=>sq.getColumn(2+i).width=w);sq.getColumn(1).width=3;
+    sq.autoFilter={from:{row:6,column:2},to:{row:Math.max(7,r-1),column:1+H.length}};
+    sq.addConditionalFormatting({ref:'B7:'+colName(1+H.length)+Math.max(7,r-1),rules:[{type:'expression',formulae:['$F7<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFFBEB'}}}}]});
+  }
   {dropSheet('_toe_meta');const ms=wb.addWorksheet('_toe_meta',{state:'hidden'});const META={version:2,mode:'year',round:'year',from,to,r1To,closing:TOE.closing,popRows:TOE.popRows||1000,controls:{}};p.ctrls.forEach(o=>{META.controls[o.controlCode]={sheet:o.controlCode.substring(0,31),pop:popRef[o.controlCode]||null,cls:toeCalc(o).cls,lv:toeCalc(o).lv}});const js=JSON.stringify(META);for(let i=0,r=1;i<js.length;i+=30000,r++)ms.getCell(r,1).value=js.slice(i,i+30000)}
   await finishBook(p,wb,useOrig);
 }
