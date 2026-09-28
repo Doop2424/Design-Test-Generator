@@ -125,7 +125,7 @@
     <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
     <button class="ghost" id="loadProjTop">불러오기</button>
     <span class="samp" id="saveStat" style="max-width:none"></span>
-    <div class="stage">v3.0</div>
+    <div class="stage">v3.1</div>
   </div>
 </header>
 
@@ -701,6 +701,8 @@ function loadSheet(){
   SHEET_NAME=document.getElementById('sheet').value;
   const ws=WB.Sheets[SHEET_NAME];
   GRID=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:null,blankrows:true});
+  {const rg=ws['!ref']?XLSX.utils.decode_range(ws['!ref']):null;              // 사용 범위가 A1에서 시작하지 않으면 빈 행·열을 앞에 채워 GRID 인덱스 = 시트 좌표
+   if(rg){if(rg.s.c>0)GRID=GRID.map(r=>Array(rg.s.c).fill(null).concat(r));for(let i=0;i<rg.s.r;i++)GRID.unshift([])}}
   NCOL=GRID.reduce((m,r)=>Math.max(m,r.length),0);
   GRID=GRID.map(r=>{const a=r.slice();while(a.length<NCOL)a.push(null);return a});
   FILLED=GRID.map(r=>r.slice());
@@ -756,7 +758,8 @@ function headText(c){
     const above=ai>=0?clean(GRID[cand[ai]][c]):'';
     if(above&&above!==leaf){parents.unshift(leaf);leaf=above;leafRow=cand[ai]}
   }
-  return {leaf,leafRow,parents:[...new Set(parents)].filter(x=>x!==leaf)};
+  const raw=String((GRID[leafRow]||[])[c]!=null?GRID[leafRow][c]:(FILLED[leafRow]||[])[c]||'');
+  return {leaf,leafRow,raw,parents:[...new Set(parents)].filter(x=>x!==leaf)};
 }
 function colLabel(c){const h=headText(c);return colName(c)+' · '+(h.leaf.replace(/\n/g,' ')||'(빈 제목)')+(h.parents.length?' ‹'+h.parents.join(' / ')+'›':'')}
 function autoLabel(f){
@@ -1835,6 +1838,7 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
   let rsSheet=null,rsRow=5;const hdrCache={};
   const dupsIn=(row,txt,skip)=>{let d=0;for(let k=0;k<NCOL;k++){if(k!==skip&&clean((GRID[row]||[])[k])===txt)d++}return d};
   const rowAt=delta=>'INDEX('+ALL+','+RS+'!$C$2'+(delta?(delta>0?'+':'')+delta:'')+',0)';        // 헤더 행(키 기준) + 오프셋 → 그 행 전체
+  const mt=(cellRef,rowExpr)=>'IFERROR(MATCH('+cellRef+','+rowExpr+',0),MATCH(TRIM(CLEAN('+cellRef+'))&"*",'+rowExpr+',0))';   // 정확히 → 앞부분 일치(뒤 공백·줄바꿈 무시)
   const ensureRef=()=>{
     if(rsSheet||MAP.controlCode==null)return rsSheet;
     dropSheet('RCM참조');rsSheet=wb.addWorksheet('RCM참조');const rs=rsSheet;
@@ -1843,11 +1847,11 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
     rs.getCell('B1').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};rs.mergeCells('B1:H1');
     const uniqKey=(()=>{let d=0;for(let r=0;r<Math.min(60,GRID.length);r++)for(let k=0;k<NCOL;k++){if(clean((GRID[r]||[])[k])===kh.leaf)d++}return d===1})();
     const l=(r,a,b,c2,d)=>{const A=rs.getCell(r,2);A.value=a;styleLabel(A);const Bc=rs.getCell(r,3);Bc.value=b;styleVal(Bc);const C=rs.getCell(r,4);C.value=c2;styleVal(C);C.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};const D=rs.getCell(r,5);D.value=d||'';D.font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}};
-    l(2,'키 헤더 행',HDR+1,kh.leaf,uniqKey?'통제 ID 헤더가 있는 행(자동 탐지, 위 60행 내)':'통제 ID 헤더가 여러 곳에 있어 행 번호 고정');
-    for(let r=1;r<=60;r++){const k=rs.getCell(r,11);k.value={formula:'--(COUNTIF(INDEX('+ALL+','+r+',0),$D$2)>0)',result:r===kh.leafRow+1?1:0};k.font={name:'맑은 고딕',size:8,color:{argb:'FFBBBBBB'}}}   // K열: 행별 키 헤더 존재 여부(오류 셀 무시)
+    l(2,'키 헤더 행',HDR+1,kh.raw||kh.leaf,uniqKey?'통제 ID 헤더가 있는 행(자동 탐지, 위 60행 내)':'통제 ID 헤더가 여러 곳에 있어 행 번호 고정');
+    for(let r=1;r<=60;r++){const k=rs.getCell(r,11);k.value={formula:'IF(COUNTIF(INDEX('+ALL+','+r+',0),TRIM(CLEAN($D$2))&"*")>0,1,0)',result:r===kh.leafRow+1?1:0};k.font={name:'맑은 고딕',size:8,color:{argb:'FFBBBBBB'}}}   // K열: 행별 키 헤더 존재 여부(오류 셀 무시)
     rs.getCell('K1').note='행별 키 헤더 탐지(자동)';rs.getColumn(11).width=4;
     rs.getCell('C2').value=uniqKey?{formula:'IFERROR(MATCH(1,$K$1:$K$60,0),'+(HDR+1)+')'+(kDelta?(kDelta>0?'-':'+')+Math.abs(kDelta):''),result:HDR+1}:HDR+1;
-    l(3,'키(통제 ID) 열',{formula:'MATCH(D2,'+rowAt(kDelta)+',0)',result:MAP.controlCode+1},kh.leaf,'통제 ID 열 번호');
+    l(3,'키(통제 ID) 열',{formula:mt('D2',rowAt(kDelta)),result:MAP.controlCode+1},kh.leaf,'통제 ID 열 번호');
     rs.getCell('D3').value={formula:'D2',result:kh.leaf};
     ['항목','열 번호','헤더 이름(수정 가능)','비고'].forEach((h,i)=>{const c=rs.getCell(4,2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center'}});
     [30,10,34,40].forEach((w,i)=>rs.getColumn(2+i).width=w);rs.getColumn(1).width=3;
@@ -1858,17 +1862,17 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
     const rs=ensureRef();if(!rs){hdrCache[c]=null;return null}
     const h=headText(c);let colFx=null,note='';
     if(h.leaf){const row=h.leafRow,delta=row-HDR;
-      if(!dupsIn(row,h.leaf,c)){colFx=rid=>'MATCH(D'+rid+','+rowAt(delta)+',0)';note='헤더 이름으로 찾음'}
+      if(!dupsIn(row,h.leaf,c)){colFx=rid=>mt('D'+rid,rowAt(delta));note='헤더 이름으로 찾음'}
       else{for(const pr of [HDR,HDR-1,HDR-2].filter(r=>r>=0&&r!==row)){
           let g=c;while(g>=0&&clean((GRID[pr]||[])[g])==='')g--;const ptxt=g>=0?clean(GRID[pr][g]):'';
           if(ptxt&&ptxt!==h.leaf&&!dupsIn(pr,ptxt,g)&&c-g<30){const pd=pr-HDR;
-            colFx=rid=>{const G='MATCH('+xlStr(ptxt)+','+rowAt(pd)+',0)';const R=rowAt(delta);return 'MATCH(D'+rid+',INDEX('+R+',1,'+G+'):INDEX('+R+',1,'+G+'+29),0)+'+G+'-1'};
+            colFx=rid=>{const G=mt(xlStr(ptxt),rowAt(pd));const R=rowAt(delta);return mt('D'+rid,'INDEX('+R+',1,'+G+'):INDEX('+R+',1,'+G+'+29)')+'+'+G+'-1'};
             note='그룹 「'+ptxt+'」 안에서 찾음';break}}}
       if(!colFx)note='같은 이름이 여러 곳 — 열 번호 고정'}
     const rid=rsRow++;const f=FIELDS.find(v=>MAP[v.key]===c);
     const A=rs.getCell(rid,2);A.value=f?labelOf(f):colName(c);styleLabel(A);
     const Bc=rs.getCell(rid,3);Bc.value=colFx?{formula:colFx(rid),result:c+1}:c+1;styleVal(Bc);
-    const D=rs.getCell(rid,4);D.value=h.leaf||'';styleVal(D);D.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
+    const D=rs.getCell(rid,4);D.value=h.raw||h.leaf||'';styleVal(D);D.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
     const E=rs.getCell(rid,5);E.value=note+' · 원래 '+colName(c)+'열';E.font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
     hdrCache[c]=RS+'!$C$'+rid;return hdrCache[c]};
   const refOf=(o,anchor)=>key=>{              // RCM 값 참조식 (없으면 null)
