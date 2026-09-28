@@ -18,6 +18,7 @@
   header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;border-bottom:2px solid var(--ink);padding-bottom:12px;margin-bottom:20px;flex-wrap:wrap}
   h1{font-size:20px;margin:0;letter-spacing:-.02em;font-weight:700}
   .sub{color:var(--muted);font-size:12px;margin-top:4px}
+  header.top .row{margin-left:auto}
   .stage{font-family:var(--mono);font-size:11px;color:var(--accent);background:var(--accent-soft);border:1px solid #C4DBE1;padding:4px 9px;border-radius:2px;white-space:nowrap}
   section.card{background:var(--panel);border:1px solid var(--rule);border-radius:3px;margin-bottom:16px}
   .card>h2{font-size:12px;font-weight:700;letter-spacing:.06em;margin:0;padding:11px 16px;border-bottom:1px solid var(--rule-soft);color:var(--accent);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -120,7 +121,12 @@
     <h1>설계/운영평가 템플릿 생성기</h1>
     <div class="sub">RCM 열을 자동 인식하고, 프로세스별 설계평가(TOD) 또는 운영평가(TOE) 파일을 만듭니다.</div>
   </div>
-  <div class="stage">v2.5</div>
+  <div class="row" style="align-items:center;gap:8px">
+    <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
+    <button class="ghost" id="loadProjTop">불러오기</button>
+    <span class="samp" id="saveStat" style="max-width:none"></span>
+    <div class="stage">v2.6</div>
+  </div>
 </header>
 
 <section class="card">
@@ -132,7 +138,7 @@
     <input type="file" id="file" accept=".xlsx,.xls,.xlsm" class="hidden">
     <div id="loadmsg" style="margin-top:10px"></div>
     <div class="row" style="margin-top:12px">
-      <button class="ghost" id="saveProj">작성중인 내용 저장</button>
+      <button class="ghost" id="saveProj">작성중인 내용 저장</button><span class="samp">(상단 「작업 저장」과 동일 — 설계·운영평가 설정 모두 포함)</span>
       <button class="ghost" id="loadProjBtn">저장한 작업 불러오기</button>
       <input type="file" id="loadProj" accept=".json" class="hidden">
       <label class="f" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="saveRaw" checked> 원본 RCM 파일 포함</label>
@@ -586,6 +592,7 @@ function genReq(o,force){
 }
 let WB=null,GRID=[],FILLED=[],MERGES=[],NCOL=0,HDR=0,DSTART=0,DEND=0,MAP={},LABEL={},PROCS=[],CURPROC=null,SEL=0;
 let RAW_BUF=null,RAW_NAME='',SHEET_NAME='',RAW_XLSX=false;   // 원본 파일(ExcelJS 로드용)
+let COLW=[],ROWH=[];                                          // 새로 그리기 모드용 원본 열너비·행높이
 let USE={},EXTRA=[];                                          // USE[key]===false → 사용 안 함 / EXTRA: 사용자 추가 항목
 let RCM_MODE='original';
 let MAP_DIRTY=false;   // 생성 후 매핑이 바뀌었는지
@@ -686,6 +693,7 @@ function loadSheet(){
   GRID=GRID.map(r=>{const a=r.slice();while(a.length<NCOL)a.push(null);return a});
   FILLED=GRID.map(r=>r.slice());
   MERGES=(ws['!merges']||[]).map(m=>({s:{r:m.s.r,c:m.s.c},e:{r:m.e.r,c:m.e.c}}));
+  COLW=(ws['!cols']||[]).map(c=>c&&(c.wch||(c.wpx?c.wpx/7:null)));ROWH=(ws['!rows']||[]).map(r=>r&&r.hpt);   // 원본 열너비·행높이
   MERGES.forEach(m=>{const v=(GRID[m.s.r]||[])[m.s.c];
     for(let r=m.s.r;r<=m.e.r;r++)for(let c=m.s.c;c<=m.e.c;c++){if(FILLED[r])FILLED[r][c]=v}});
   autoDetectRows(); syncRowInputs(); LABEL={}; buildMapping(true);
@@ -1633,11 +1641,14 @@ document.getElementById('reqRegenAll').onclick=()=>{
 /* ══════════ 작업 저장 / 불러오기 ══════════ */
 function bufToB64(buf){const u=new Uint8Array(buf);let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s)}
 function b64ToBuf(b){const s=atob(b),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u.buffer}
+document.getElementById('saveProjTop').onclick=()=>document.getElementById('saveProj').click();
+document.getElementById('loadProjTop').onclick=()=>document.getElementById('loadProj').click();
 document.getElementById('saveProj').onclick=()=>{
+  const st=document.getElementById('saveStat');const d=new Date();st.textContent='저장 '+p2(d.getHours())+':'+p2(d.getMinutes());
   if(!PROCS.length){alert('먼저 설계평가를 생성하세요.');return}
   const o={version:6,savedAt:new Date().toISOString(),templates:TMPL,reqRules:REQ,optProg:OPT_PROG,optConc:OPT_CONC,
     labels:LABEL,mapping:{},headerRow:HDR+1,dataStart:DSTART+1,dataEnd:DEND+1,
-    rcm:{grid:GRID,merges:MERGES,ncol:NCOL},use:USE,extra:EXTRA,labelMode:LABEL_MODE,fileMeta:FILEMETA,rcmMode:RCM_MODE,
+    rcm:{grid:GRID,merges:MERGES,ncol:NCOL,colw:COLW,rowh:ROWH},use:USE,extra:EXTRA,labelMode:LABEL_MODE,fileMeta:FILEMETA,rcmMode:RCM_MODE,
     rawFile:(RAW_BUF&&document.getElementById('saveRaw').checked)?{name:RAW_NAME,sheet:SHEET_NAME,xlsx:RAW_XLSX,b64:bufToB64(RAW_BUF)}:null,
     fxText:FX_TEXT,fxMode:FX_MODE,toe:TOE,outMode:OUT_MODE,prev1:PREV1,
     procs:PROCS.map(p=>({code:p.code,name:p.name,ctrls:p.ctrls}))};
@@ -1663,6 +1674,7 @@ document.getElementById('loadProj').onchange=e=>{
     if(m.outMode)OUT_MODE=m.outMode;
     if(m.prev1){PREV1=m.prev1;const pi=document.getElementById('prevInfo');pi.classList.remove('hidden');pi.innerHTML='<b>1차 파일</b> '+esc(PREV1.file||'')+' (작업 파일에서 복원) — 통제 '+Object.keys(PREV1.ctrls).length+'건 <button class="ghost tiny" id="prevClear">1차 파일 해제</button>';document.getElementById('prevClear').onclick=()=>{PREV1=null;pi.classList.add('hidden')}}
     if(m.fxMode){FX_MODE=m.fxMode==='direct'?'lookup':m.fxMode;document.getElementById('fxmode').value=FX_MODE;setFxHelp()}
+    if(m.rcm){COLW=m.rcm.colw||[];ROWH=m.rcm.rowh||[]}
     if(m.rawFile&&m.rawFile.b64){try{RAW_BUF=b64ToBuf(m.rawFile.b64);RAW_NAME=m.rawFile.name||'';SHEET_NAME=m.rawFile.sheet||'';RAW_XLSX=!!m.rawFile.xlsx}catch(e){RAW_BUF=null}}
     document.getElementById('rcmmode').value=RCM_MODE;
     if(m.optProg&&m.optProg.length)OPT_PROG=m.optProg;
@@ -1794,6 +1806,7 @@ function fxText(o,tmpl,refOf){                 // 템플릿 문구를 RCM 참조
   return ok&&f.length<8000?f:null;
 }
 const qs=n=>"'"+String(n).replace(/'/g,"''")+"'";   // 시트명 인용
+const hlink=(sheet,text)=>({formula:'HYPERLINK("#'+qs(sheet).replace(/"/g,'""')+'!A1","'+String(text).replace(/"/g,'""')+'")',result:String(text)});   // 내부 링크: 관계(rels) 없이 수식으로
 
 async function openBook(p){                   // RCM 시트 준비 + 수식 헬퍼 (설계평가·운영평가 공용)
   const useOrig=RCM_MODE!=='rebuild'&&RAW_BUF&&RAW_XLSX;
@@ -1818,6 +1831,7 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
     const f=fxText(o,TMPL[tmplKey],refOf(o));return f?{formula:f,result:val||null}:val;
   };
   const dropSheet=n=>{const ex=wb.getWorksheet(n);if(ex)wb.removeWorksheet(ex.id)};
+  const _add=wb.addWorksheet.bind(wb);wb.addWorksheet=(n,o)=>_add(String(n).replace(/[\[\]:*?\/\\]/g,'_').substring(0,31),o);   // 시트명 금지문자·31자 제한
 
   /* 시트1 : RCM */
   const hasRCM=GRID.length>0&&NCOL>0&&DSTART>0;
@@ -1862,9 +1876,9 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
       }
     });
     if(hasRCM){
-      for(let c=1;c<=NCOL;c++)rcm.getColumn(c).width=18;
-      if(MAP.controlDesc!=null)rcm.getColumn(MAP.controlDesc+1).width=60;
-      if(MAP.testProc!=null)rcm.getColumn(MAP.testProc+1).width=60;
+      for(let c=1;c<=NCOL;c++)rcm.getColumn(c).width=(COLW[c-1]&&COLW[c-1]>0)?COLW[c-1]:18;   // 원본 열너비 유지
+      if(!COLW.length){if(MAP.controlDesc!=null)rcm.getColumn(MAP.controlDesc+1).width=60;if(MAP.testProc!=null)rcm.getColumn(MAP.testProc+1).width=60}
+      for(let r=0;r<DSTART;r++){if(ROWH[r])rcm.getRow(r+1).height=ROWH[r]}
       if(rcmRows.length)rcm.autoFilter={from:{row:HDR+1,column:1},to:{row:DSTART+rcmRows.length,column:NCOL}};
     }
   }
@@ -1889,7 +1903,7 @@ function writeReqSheet(wb,p,fx){
     const r=rq.getRow(6+i),anc='$C'+(6+i);
     const vals=[i+1,null,fx(o,'controlName',o.controlName,anc),fx(o,'controlDesc',o.controlDesc,anc),o.autoManual||(isAuto(o)?'자동(추정)':'수동(추정)'),shortFreq(o.frequency||''),
       evLabel(o.evType),o.reqPop||'',o.reqSample||'',o.reqNote||'',o.recv||'미입수',''];
-    vals.forEach((v,k)=>{const c=r.getCell(2+k);if(k===1){c.value={text:o.controlCode,hyperlink:"#"+qs(o.controlCode.substring(0,31))+"!A1"};
+    vals.forEach((v,k)=>{const c=r.getCell(2+k);if(k===1){c.value=hlink(o.controlCode.substring(0,31),o.controlCode);
         c.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};c.alignment={vertical:'top'};c.border=BORDER}
       else{c.value=v;styleVal(c)}});
     r.getCell(2).alignment={vertical:'top',horizontal:'center'};
@@ -1930,7 +1944,7 @@ async function exportProc(p){
     [['controlName',o.controlName],['keyControl',o.keyControl],['frequency',o.frequency]]
       .forEach(([k2,v],k)=>{const c=r.getCell(3+k);c.value=fx(o,k2,v,anc);styleVal(c)});
     const lk=r.getCell(6);
-    lk.value={text:o.controlCode,hyperlink:"#"+qs(o.controlCode.substring(0,31))+"!A1"};
+    lk.value=hlink(o.controlCode.substring(0,31),o.controlCode);
     lk.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};lk.border=BORDER;
     const cp=r.getCell(7);cp.value=o.progress;styleVal(cp);cp.dataValidation=dvList(OPT_PROG);
     const cc=r.getCell(8);cc.value=o.conclusion;styleVal(cc);cc.dataValidation=dvList(OPT_CONC);
@@ -2039,9 +2053,9 @@ async function exportProcTOE(p){
     const r=idx.getRow(7+i),anc='$B'+(7+i),c=toeCalc(o),t=toeOf(o);
     const vals=[o.controlCode,fx(o,'controlName',o.controlName,anc),fx(o,'keyControl',o.keyControl,anc),fx(o,'frequency',o.frequency,anc),
       o.autoManual||(isAuto(o)?'자동(추정)':'수동(추정)'),c.lv,c.annual,c.n,t.method||(c.auto?'해당없음(자동통제)':'무작위 추출'),null,t.prog||OPT_TPROG[0],t.result||'Effective'];
-    vals.forEach((v,k)=>{const cell=r.getCell(2+k);if(k===9){cell.value={text:o.controlCode,hyperlink:"#"+qs(o.controlCode.substring(0,31))+"!A1"};cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
+    vals.forEach((v,k)=>{const cell=r.getCell(2+k);if(k===9){cell.value=hlink(o.controlCode.substring(0,31),o.controlCode);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
     r.getCell(12).dataValidation=dvList(OPT_TPROG);r.getCell(13).dataValidation=dvList(OPT_TOE_RESULT);
-    const mc=r.getCell(14);if(c.cls==='event'){const nm=('P_'+o.controlCode).substring(0,31);mc.value={text:nm,hyperlink:'#'+qs(nm)+'!A1'};mc.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{mc.value=c.auto?'N/A':'주기성 샘플링';styleVal(mc)}mc.border=BORDER;
+    const mc=r.getCell(14);if(c.cls==='event'){const nm=('P_'+o.controlCode).substring(0,31);mc.value=hlink(nm,nm);mc.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{mc.value=c.auto?'N/A':'주기성 샘플링';styleVal(mc)}mc.border=BORDER;
     if(PREV1&&TOE.round==='2'){const pc=PREV1.ctrls[o.controlCode];const c1=r.getCell(15);c1.value=pc?(pc.concl.result||''):'(1차 없음)';styleVal(c1)}
   });
   [18,40,10,14,12,10,9,11,14,18,22,16,18,14].forEach((w,i)=>idx.getColumn(2+i).width=w);idx.getColumn(1).width=3;
@@ -2228,7 +2242,7 @@ async function exportProcTOE(p){
       if(x.t==='kv'){const cc=valc(r,3,9,F(x.key));if(['controlDesc','testProc','relatedDoc','population','crDesc','overallDesc','riskName'].includes(x.key))ws.getRow(r).height=Math.max(30,Math.min(160,capHeight(o[x.key]||'')))}
       else if(x.t==='kv2'){const refs=x.keys.map(k=>refOf(o,anchor)(k));const vals=x.keys.map(k=>o[k]||'');
         if(refs.every(Boolean))valc(r,3,9,{formula:'TRIM('+refs.join('&" "&')+')',result:vals.join(' ').trim()||null});else valc(r,3,9,vals.join(' ').trim())}
-      else if(x.t==='val'){const cc=valc(r,3,9,x.value);if(x.tall)ws.getRow(r).height=32;if(x.sub===RL('sampleSize'))mrec.sampleRow=r;if(x.sub===RL('method'))mrec.methodRow=r;if(x.sub===RL('period'))mrec.periodRow=r;if(x.link){ws.unMergeCells(r,3,r,9);ws.mergeCells(r,3,r,8);const lk=ws.getCell(r,9);lk.value={text:'▶ 시트 열기',hyperlink:'#'+qs(x.link)+'!A1'};lk.font={name:'맑은 고딕',size:9,color:{argb:'FF0E4C5C'},underline:true};lk.alignment={horizontal:'right',vertical:'middle'};lk.border=BORDER}}
+      else if(x.t==='val'){const cc=valc(r,3,9,x.value);if(x.tall)ws.getRow(r).height=32;if(x.sub===RL('sampleSize'))mrec.sampleRow=r;if(x.sub===RL('method'))mrec.methodRow=r;if(x.sub===RL('period'))mrec.periodRow=r;if(x.link){ws.unMergeCells(r,3,r,9);ws.mergeCells(r,3,r,8);const lk=ws.getCell(r,9);lk.value=hlink(x.link,'▶ 시트 열기');lk.font={name:'맑은 고딕',size:9,color:{argb:'FF0E4C5C'},underline:true};lk.alignment={horizontal:'right',vertical:'middle'};lk.border=BORDER}}
       else if(x.t==='code'){valc(r,3,9,o.controlCode).font={name:'맑은 고딕',size:10,bold:true}}
       else if(x.t==='two'){lab(r,3,3,x.isPerf?'수행자':'검토자');valc(r,4,5,x.a||'');lab(r,6,6,x.isPerf?'수행일':'검토일');const dc=valc(r,7,9,x.b?new Date(x.b):'');dc.numFmt='yyyy-mm-dd';if(!x.noMeta){if(x.isPerf)mrec.perfRow=r;else mrec.revRow=r}}
       else if(x.t==='flags'){
@@ -2412,7 +2426,7 @@ async function exportProcTOEYear(p){
       lvs.forEach((lv,k)=>{const c0=7+k*4;const gp=gs.find(x=>x.lv===lv);
         ps.getCell(h1,c0).value='1차 No';ps.getCell(h1,c0+1).value=lv+' 1차 선정';ps.getCell(h1,c0+2).value=lv+' 2차 선정';ps.getCell(h1,c0+3).value='2차 No';
         // 샘플수 셀: 연간(c0), 1차(c0+1), 2차(c0+2) — 값은 위 h2에 이미 기록. 라벨 보조
-        ps.getCell(h2,c0+3).value={formula:'"연간 "&'+colName(c0-1)+h2+'&" · 1차 "&'+colName(c0)+h2+'&" · 2차 "&'+colName(c0+1)+h2,result:''};ps.getCell(h2,c0+3).font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
+        ps.getCell(h2,c0+3).value={formula:'"연간 "&'+colName(c0-1)+h2+'&" · 1차 "&'+colName(c0)+h2+'&" · 2차 "&'+colName(c0+1)+h2,result:null};ps.getCell(h2,c0+3).font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
         perRef[cls+'|'+lv]={lab:PS+'!$B$'+s0+':$B$'+e,no1:PS+'!$'+colName(c0-1)+'$'+s0+':$'+colName(c0-1)+'$'+e,no2:PS+'!$'+colName(c0+2)+'$'+s0+':$'+colName(c0+2)+'$'+e,
           nA:PS+'!$'+colName(c0-1)+'$'+h2,n1:PS+'!$'+colName(c0)+'$'+h2,n2:PS+'!$'+colName(c0+1)+'$'+h2,n:gp.n,ctrls:gp.ctrls.join(', ')};
         ps.getCell(h1,c0+3).value='2차 No · '+gp.ctrls.join(', ');
@@ -2529,7 +2543,7 @@ async function exportProcTOEYear(p){
       if(['kv','kv2','val','code'].includes(x.t)){if(hasSub){if(prevLab===x.label){lab(r,1,1,x.label)}else{flushLab();prevLab=x.label;labStart=r;lab(r,1,1,x.label)}lab(r,2,2,x.sub)}else{flushLab();lab(r,1,2,x.label)}}else flushLab();
       if(x.t==='kv'){valc(r,3,9,F(x.key));if(['controlDesc','testProc','relatedDoc','population','crDesc','overallDesc','riskName'].includes(x.key))ws.getRow(r).height=Math.max(30,Math.min(160,capHeight(o[x.key]||'')))}
       else if(x.t==='kv2'){const refs=x.keys.map(kk=>refOf(o,anchor)(kk));const vals=x.keys.map(kk=>o[kk]||'');if(refs.every(Boolean))valc(r,3,9,{formula:'TRIM('+refs.join('&" "&')+')',result:vals.join(' ').trim()||null});else valc(r,3,9,vals.join(' ').trim())}
-      else if(x.t==='val'){valc(r,3,9,x.value);if(x.tall)ws.getRow(r).height=32;if(x.link){ws.unMergeCells(r,3,r,9);ws.mergeCells(r,3,r,8);const lk=ws.getCell(r,9);lk.value={text:'▶ 시트 열기',hyperlink:'#'+qs(x.link)+'!A1'};lk.font={name:'맑은 고딕',size:9,color:{argb:'FF0E4C5C'},underline:true};lk.alignment={horizontal:'right',vertical:'middle'};lk.border=BORDER}}
+      else if(x.t==='val'){valc(r,3,9,x.value);if(x.tall)ws.getRow(r).height=32;if(x.link){ws.unMergeCells(r,3,r,9);ws.mergeCells(r,3,r,8);const lk=ws.getCell(r,9);lk.value=hlink(x.link,'▶ 시트 열기');lk.font={name:'맑은 고딕',size:9,color:{argb:'FF0E4C5C'},underline:true};lk.alignment={horizontal:'right',vertical:'middle'};lk.border=BORDER}}
       else if(x.t==='code'){valc(r,3,9,o.controlCode).font={name:'맑은 고딕',size:10,bold:true}}
       else if(x.t==='flags'){const n=x.items.length,w=Math.floor(7/n);let col=3;lab(r,1,1,x.label);ws.mergeCells(r,1,r+1,2);for(let kk=1;kk<=2;kk++){ws.getCell(r,kk).border=BORDER;ws.getCell(r+1,kk).border=BORDER}
         x.items.forEach((it,i)=>{const c1=col,c2=(i===n-1)?9:col+w-1;const h=ws.getCell(r,c1);h.value=it.cap;styleLabel(h);h.alignment={horizontal:'center',vertical:'middle',wrapText:true};if(c2>c1)ws.mergeCells(r,c1,r,c2);for(let kk=c1;kk<=c2;kk++)ws.getCell(r,kk).border=BORDER;
@@ -2576,7 +2590,7 @@ async function exportProcTOEYear(p){
     const ir=idx.getRow(7+oi),anc='$B'+(7+oi);
     const vals=[o.controlCode,fx(o,'controlName',o.controlName,anc),fx(o,'keyControl',o.keyControl,anc),fx(o,'frequency',o.frequency,anc),o.autoManual||(isAuto(o)?'자동(추정)':'수동(추정)'),c.lv,
       c.auto?1:PQ?{formula:PQ+'!$C$8',result:c.annual}:pref?{formula:pref.nA,result:c.annual}:c.annual,t.method||(c.auto?'해당없음(자동통제)':'무작위 추출'),null,t.prog||OPT_TPROG[0],'Effective','Effective','Effective',null];
-    vals.forEach((v,kk)=>{const cell=ir.getCell(2+kk);if(kk===8){cell.value={text:o.controlCode,hyperlink:"#"+qs(o.controlCode.substring(0,31))+"!A1"};cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else if(kk===13){if(pn){cell.value={text:pn,hyperlink:'#'+qs(pn)+'!A1'};cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{cell.value=c.auto?'N/A':'주기성 샘플링';styleVal(cell)}cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
+    vals.forEach((v,kk)=>{const cell=ir.getCell(2+kk);if(kk===8){cell.value=hlink(o.controlCode.substring(0,31),o.controlCode);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else if(kk===13){if(pn){cell.value=hlink(pn,pn);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{cell.value=c.auto?'N/A':'주기성 샘플링';styleVal(cell)}cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
     ir.getCell(11).dataValidation=dvList(OPT_TPROG);[12,13,14].forEach(cc=>ir.getCell(cc).dataValidation=dvList(OPT_TOE_RESULT));
   });
   [18,40,10,14,12,10,9,14,18,20,12,12,12,18].forEach((w,i)=>idx.getColumn(2+i).width=w);idx.getColumn(1).width=3;
