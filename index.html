@@ -125,7 +125,7 @@
     <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
     <button class="ghost" id="loadProjTop">불러오기</button>
     <span class="samp" id="saveStat" style="max-width:none"></span>
-    <div class="stage">v3.1</div>
+    <div class="stage">v3.3</div>
   </div>
 </header>
 
@@ -354,19 +354,19 @@
 /* ══════════ 필드 정의 ══════════ */
 const FIELDS = [
  {g:'필수', key:'processCode', label:'프로세스 코드', hint:'파일 분리 기준 · 시트 최상단',
-  pos:[[/프로세스(번호|코드|no|code|id)/,12],[/process(no|code|id|#)/,9],[/^프로세스$/,4],[/mega|대분류|cycle/,2]],
+  pos:[[/^mega(process)?(code|no|번호|코드)$|^(대|메가)(분류|프로세스)(코드|번호)$/,14],[/프로세스(번호|코드|no|code|id)/,12],[/process(no|code|id|#)/,9],[/^프로세스$/,4],[/mega|대분류|cycle/,2]],
   neg:[[/하위|sub/,7],[/명칭|이름|name|설명|text/,14]],
   val:v=>/^[A-Za-z가-힣]{1,12}[0-9]{0,3}$/.test(v)?3:0},
  {g:'필수', key:'controlCode', label:'통제활동 코드', hint:'시트명 · Link 기준',
-  pos:[[/통제(활동)?(번호|코드|no|code|id)/,14],[/control(activity)?(no|code|id)/,10]],
+  pos:[[/통제활동key|통제key|controlkey|^key$|통제활동(번호|코드|id)|통제(번호|코드|id)/,15],[/통제(활동)?(번호|코드|no|code|id)/,14],[/control(activity)?(no|code|id)/,10]],
   neg:[[/명칭|이름|name|설명|기술|목적|description/,14],[/리스크|risk|wcgw/,9]],
   val:v=>/[A-Za-z]/.test(v)&&/[0-9]/.test(v)&&v.length<=30?3:0},
  {g:'필수', key:'controlName', label:'통제활동명',
-  pos:[[/통제(활동)?(명칭|명$|이름|name)/,14],[/control(activity)?name/,10]],
+  pos:[[/통제활동(제목|명|명칭|이름|title)|통제(제목|명칭)/,16],[/통제(활동)?(명칭|명$|이름|name)/,14],[/control(activity)?name/,10]],
   neg:[[/번호|코드|no$|code|id$/,14],[/설명|기술|description|목적/,11]],
   val:v=>v.length>=4&&v.length<=60?2:0},
  {g:'필수', key:'keyControl', label:'핵심통제 여부',
-  pos:[[/핵심통제/,14],[/key.?control/,11],[/주요통제/,7]],
+  pos:[[/^key$|^keycontrol$|핵심통제(여부)?$/,12],[/핵심통제/,14],[/key.?control/,11],[/주요통제/,7]],
   neg:[[/근거|비핵심|non.?key|reason|사유/,16]],
   val:v=>/^(y|n|yes|no|예|아니오|key|nonkey|non-key|비핵심|핵심)$/i.test(v)?4:0},
  {g:'필수', key:'frequency', label:'통제주기',
@@ -382,11 +382,11 @@ const FIELDS = [
   neg:[[/자동|수동|manual|automat/,14],[/목적|분류|구분/,7]],
   val:v=>/예방|적발|prevent|detect/i.test(v)?5:0},
  {g:'필수', key:'riskName', label:'통제위험 내용', hint:'예: RISK(WCGW)명칭 · 속성2 문구에 사용',
-  pos:[[/risk.*명칭|리스크명칭|위험명칭|위험기술|리스크기술|wcgw명|riskdescription|위험description/,15],[/(리스크|위험|risk).*(내용|설명|명|기술|description)/,10],[/^wcgw$|^risk$|^위험$/,6]],
+  pos:[[/processriskpoint|^prp$|riskpoint|위험기술|위험내용/,15],[/risk.*명칭|리스크명칭|위험명칭|위험기술|리스크기술|wcgw명|riskdescription|위험description/,15],[/(리스크|위험|risk).*(내용|설명|명|기술|description)/,10],[/^wcgw$|^risk$|^위험$/,6]],
   neg:[[/번호|no$|코드|code/,14],[/레벨|level|평가|발생가능성|영향도|rating/,13]],
   val:v=>v.length>15?4:0},
  {g:'필수', key:'controlDesc', label:'통제활동 기술',
-  pos:[[/통제활동(설명|기술|내용)/,16],[/통제(설명|기술서)/,12],[/when.*who.*what/,10],[/control.?(description|activity)/,9],[/^통제활동$/,8]],
+  pos:[[/통제활동(상세|상세내용|설명|기술|내용)|통제(상세|기술)/,16],[/통제활동(설명|기술|내용)/,16],[/통제(설명|기술서)/,12],[/when.*who.*what/,10],[/control.?(description|activity)/,9],[/^통제활동$/,8]],
   neg:[[/명칭|번호|코드|목적|id/,14]], val:v=>v.length>60?4:0},
  {g:'필수', key:'testProc', label:'통제 테스트 절차',
   pos:[[/테스트절차/,16],[/test.?procedure/,11],[/(수행|평가)절차/,7]],
@@ -406,10 +406,10 @@ const FIELDS = [
   neg:[[/경영자주장|assertion|실재성|권리와의무|발생사실|표시와공시|측정/,20],[/샘플|sample/,8]],
   val:v=>v.length>10?2:0, defLabel:'모집단 완전성 확인 절차'},
  {g:'필수', key:'relatedDoc', label:'관련문서(증빙)',
-  pos:[[/관련(문서|증빙|서류|자료)/,16],[/테스트(샘플|증빙|문서)|샘플\(문서\)/,14],[/증빙(명|자료)?/,10],[/evidence|related.?doc|^document$/,9]],
+  pos:[[/테스트(점검)?(문서|증빙|샘플)|점검문서/,15],[/관련(문서|증빙|서류|자료)/,16],[/테스트(샘플|증빙|문서)|샘플\(문서\)/,14],[/증빙(명|자료)?/,10],[/evidence|related.?doc|^document$/,9]],
   neg:[[/ipe/,18],[/해당여부|번호|no$/,8]], val:v=>v.length<=120?2:0},
  {g:'참고', key:'processName', label:'프로세스명', opt:true, hint:'파일명에만 사용',
-  pos:[[/프로세스(명|이름|name|text)/,14],[/process(text|name|명)/,12],[/mega|대분류/,3]],
+  pos:[[/^megaprocess$|^mega$|^(대|메가)(분류|프로세스)(명|이름)?$/,13],[/프로세스(명|이름|name|text)/,14],[/process(text|name|명)/,12],[/mega|대분류/,3]],
   neg:[[/하위|sub/,8],[/번호|코드|code|no$|#/,14]], val:v=>v.length<=30?2:0},
  {g:'참고', key:'autoManual', label:'자동/수동 구분', opt:true, hint:'요청증빙 판정에 사용 · 없으면 통제기술 키워드로 추정',
   pos:[[/자동.?수동|수동.?자동|manual.?auto|auto.?manual/,16],[/자동화(여부|수준|구분)|automation/,13],[/통제(구분|방식|형태|성격)/,7]],
@@ -422,16 +422,16 @@ const FIELDS = [
  /* ── 운영평가(TOE) 양식용 항목 — RCM에 없으면 사용 해제하면 해당 행이 빠집니다 ── */
  {g:'운영평가', key:'cycleCode', label:'Cycle 코드', opt:true, pos:[[/^cycle#?$|cycle(번호|코드|no)|사이클(코드|번호|#)/,13]], neg:[[/process|프로세스|sub/,12]], val:v=>/^[A-Z]{1,4}\d{0,2}$/.test(v)?4:0},
  {g:'운영평가', key:'cycleName', label:'Cycle 명', opt:true, pos:[[/^cycle$|^사이클(명)?$/,12]], neg:[[/#|번호|코드|no$|process|sub/,12]], val:v=>v.length<=20?2:0},
- {g:'운영평가', key:'subProcessCode', label:'Sub Process 코드', opt:true, pos:[[/subprocess#|subprocess(코드|번호|no)|하위프로세스(코드|번호)/,13]], neg:[[/위험|risk|명$/,10]]},
- {g:'운영평가', key:'subProcessName', label:'Sub Process 명', opt:true, pos:[[/^subprocess$|subprocess(text|name|명)|하위프로세스(명|text)?$/,12]], neg:[[/#|코드|번호|no$|위험|risk/,12]], val:v=>v.length<=30?2:0},
+ {g:'운영평가', key:'subProcessCode', label:'Sub Process 코드', opt:true, pos:[[/^major(process)?(code|no|번호|코드)$|^(중|소)분류(코드|번호)$/,14],[/subprocess#|subprocess(코드|번호|no)|하위프로세스(코드|번호)/,13]], neg:[[/위험|risk|명$/,10]]},
+ {g:'운영평가', key:'subProcessName', label:'Sub Process 명', opt:true, pos:[[/^majorprocess$|^major$|^(중|소)분류(명)?$/,13],[/^subprocess$|subprocess(text|name|명)|하위프로세스(명|text)?$/,12]], neg:[[/#|코드|번호|no$|위험|risk/,12]], val:v=>v.length<=30?2:0},
  {g:'운영평가', key:'irLevel', label:'Sub Process 위험수준(IR)', opt:true, pos:[[/subprocess위험수준|고유위험|ir:|inherent/,13]], neg:[[/기술|설명|사유|평가요소/,10]], val:v=>/^(high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
  {g:'운영평가', key:'rtFR', label:'위험유형 — 재무보고 신뢰성', opt:true, pos:[[/재무보고신뢰성/,13],[/통제목적|controlobjective/,4]]},
  {g:'운영평가', key:'rtAsset', label:'위험유형 — 자산보호', opt:true, pos:[[/자산보호/,13],[/통제목적|controlobjective/,4]]},
  {g:'운영평가', key:'rtFraud', label:'위험유형 — 부정방지', opt:true, pos:[[/부정방지/,13],[/통제목적|controlobjective/,4]]},
- {g:'운영평가', key:'riskCode', label:'Risk 코드', opt:true, pos:[[/통제위험번호|risk(코드|번호|#|id|no)|위험(코드|번호|id)/,13]], neg:[[/설명|기술|내용|명칭|수준/,12]], val:v=>/R\d{1,3}/.test(v)?4:0},
- {g:'운영평가', key:'crLevel', label:'통제위험 수준', opt:true, pos:[[/^통제위험수준$|controlrisklevel/,13]], neg:[[/기술|설명|전반|romm|최종/,12]], val:v=>/^(higher|moderate|lower|high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
+ {g:'운영평가', key:'riskCode', label:'Risk 코드', opt:true, pos:[[/prpkey|^prp(코드|번호|id|no)$|riskkey/,15],[/통제위험번호|risk(코드|번호|#|id|no)|위험(코드|번호|id)/,13]], neg:[[/설명|기술|내용|명칭|수준/,12]], val:v=>/R\d{1,3}/.test(v)?4:0},
+ {g:'운영평가', key:'crLevel', label:'통제위험 수준', opt:true, pos:[[/^통제위험(위험)?(수준|등급)$|controlrisk(level|grade)/,13],[/^통제위험수준$|controlrisklevel/,13]], neg:[[/기술|설명|전반|romm|최종/,12]], val:v=>/^(higher|moderate|lower|high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
  {g:'운영평가', key:'crDesc', label:'통제위험 수준 기술', opt:true, pos:[[/통제위험수준(기술|설명|서술)/,13]], neg:[[/전반/,10]], val:v=>v.length>20?3:0},
- {g:'운영평가', key:'account', label:'관련 계정과목', opt:true, pos:[[/관련계정(과목)?|^계정과목$|account/,12]], neg:[[/코드|code/,6]]},
+ {g:'운영평가', key:'account', label:'관련 계정과목', opt:true, pos:[[/^계정과목(명)?$|관련계정(과목)?(명)?/,13],[/관련계정(과목)?|^계정과목$|account/,12]], neg:[[/코드|code/,6]]},
  {g:'운영평가', key:'asE', label:'경영자주장 — 실재성(E)', opt:true, pos:[[/실재성|existence/,12],[/주장|assertion/,5]]},
  {g:'운영평가', key:'asC', label:'경영자주장 — 완전성(C)', opt:true, pos:[[/^완전성$|completeness/,12],[/주장|assertion/,5]], neg:[[/모집단|확인|검토|검증/,14]]},
  {g:'운영평가', key:'asR', label:'경영자주장 — 권리와 의무(R)', opt:true, pos:[[/권리와?의무|rights/,12],[/주장|assertion/,5]]},
@@ -731,10 +731,13 @@ function autoDetectRows(){
   buildMapping(true,true);
   const cols=FIELDS.map(f=>MAP[f.key]).filter(v=>v!=null);
   DSTART=HDR+1;
-  for(let r=HDR+1;r<Math.min(GRID.length,HDR+40);r++){
+  const kc=MAP.controlCode;let found=false;
+  if(kc!=null){for(let r=HDR+1;r<Math.min(GRID.length,HDR+40);r++){if(clean(GRID[r][kc])!==''&&!/^(통제|control|key|코드|code|id|no|번호)/i.test(norm(clean(GRID[r][kc])))){DSTART=r;found=true;break}}}   // 통제코드 열에 값이 처음 나오는 행(세부 제목 행 제외)
+  if(!found)for(let r=HDR+1;r<Math.min(GRID.length,HDR+40);r++){
     const hit=cols.filter(c=>clean(GRID[r][c])!=='').length;
     if(cols.length&&hit>=Math.max(3,cols.length*0.5)){DSTART=r;break}
   }
+  if(DSTART>HDR+1)buildMapping(true,true);          // 헤더행과 데이터 사이에 세부 제목 행이 있으면 그걸 반영해 다시 매핑
   const key=MAP.controlCode!=null?MAP.controlCode:cols[0];
   DEND=DSTART;
   for(let r=DSTART;r<GRID.length;r++) if(clean(GRID[r][key])!=='')DEND=r;
@@ -746,20 +749,20 @@ function syncRowInputs(){
 }
 ['hdrRow','dataRow','endRow'].forEach(id=>document.getElementById(id).onchange=()=>{
   HDR=+hdrRow.value-1;DSTART=+dataRow.value-1;DEND=+endRow.value-1;syncRowInputs();LABEL={};buildMapping(true)});
-function headText(c){
-  let leaf=clean(FILLED[HDR]?FILLED[HDR][c]:'');let leafRow=HDR;
-  const own=clean(GRID[HDR]?GRID[HDR][c]:'');            // 병합 원점이 아니면 비어 있음
-  const p1=HDR>0?clean(FILLED[HDR-1][c]):'',p2v=HDR>1?clean(FILLED[HDR-2][c]):'';
-  const parents=[p1,p2v].filter(x=>x&&x!==leaf);
-  const spans=leaf&&c+1<NCOL&&clean(GRID[HDR][c+1])===''&&clean(FILLED[HDR][c+1])===leaf;   // 병합 원점(오른쪽으로 이어짐)
-  if((!own||spans)&&leaf){                               // 그룹 제목(병합) 아래 세부 제목이 위 행에 있는 구조
-    const isGroup=(r,t)=>c+1<NCOL&&clean(GRID[r][c+1])===''&&clean(FILLED[r][c+1])===t;   // 오른쪽으로 병합된 그룹 제목
-    const cand=[HDR-1,HDR-2,HDR-3].filter(r=>r>=0);const ai=cand.findIndex(r=>{const x=clean(GRID[r]?GRID[r][c]:'');return x&&!isGroup(r,x)});
-    const above=ai>=0?clean(GRID[cand[ai]][c]):'';
-    if(above&&above!==leaf){parents.unshift(leaf);leaf=above;leafRow=cand[ai]}
-  }
+function headText(c){                      // 헤더 밴드(헤더행 위 3행 ~ 데이터 직전 행)에서 가장 구체적인 제목(leaf)과 상위 그룹(parents)을 찾음
+  const lo=Math.max(0,HDR-3),hi=Math.min(GRID.length-1,Math.max(HDR,DSTART>HDR?DSTART-1:HDR),HDR+2);
+  const txt=r=>clean((FILLED[r]||[])[c]),own=r=>clean((GRID[r]||[])[c]);
+  const isGroup=(r,t)=>{                                 // 가로로 병합된 그룹 제목(원점이든 이어진 셀이든)
+    const right=c+1<NCOL&&own(r)!==''&&clean((GRID[r]||[])[c+1])===''&&clean((FILLED[r]||[])[c+1])===t;
+    const left=c>0&&own(r)===''&&clean((FILLED[r]||[])[c-1])===t;
+    return right||left};
+  const order=[HDR];for(let r=HDR+1;r<=hi;r++)order.push(r);for(let r=HDR-1;r>=lo;r--)order.push(r);   // 헤더행 → 아래(세부) → 위 순
+  let leaf='',leafRow=HDR;
+  for(const r of order){const t=txt(r);if(t&&!isGroup(r,t)){leaf=t;leafRow=r;break}}
+  if(!leaf)for(const r of order){const t=txt(r);if(t){leaf=t;leafRow=r;break}}
+  const parents=[];for(let r=lo;r<=hi;r++){const t=txt(r);if(t&&t!==leaf&&!parents.includes(t))parents.push(t)}
   const raw=String((GRID[leafRow]||[])[c]!=null?GRID[leafRow][c]:(FILLED[leafRow]||[])[c]||'');
-  return {leaf,leafRow,raw,parents:[...new Set(parents)].filter(x=>x!==leaf)};
+  return {leaf,leafRow,raw,parents};
 }
 function colLabel(c){const h=headText(c);return colName(c)+' · '+(h.leaf.replace(/\n/g,' ')||'(빈 제목)')+(h.parents.length?' ‹'+h.parents.join(' / ')+'›':'')}
 function autoLabel(f){
@@ -774,11 +777,12 @@ const labelOf=f=>LABEL[f.key]!==undefined?LABEL[f.key]:(LABEL_MODE==='default'?(
 const L=k=>labelOf(FIELDS.find(f=>f.key===k));
 function sampleVals(c,n){const o=[];for(let r=DSTART;r<=DEND&&o.length<n;r++){const v=clean(GRID[r][c]);if(v)o.push(v)}return o}
 function scoreField(f,c){
-  const h=headText(c),leaf=norm(h.leaf),par=norm(h.parents.join(''));
-  if(!leaf&&!par)return -99;
+  const h=headText(c),leaf=norm(h.leaf),pars=h.parents.map(norm).filter(Boolean);
+  if(!leaf&&!pars.length)return -99;
   let s=0;
-  (f.pos||[]).forEach(([re,w])=>{if(re.test(leaf))s+=w;else if(re.test(par))s+=w*0.45});
-  (f.neg||[]).forEach(([re,w])=>{if(re.test(leaf))s-=w;else if(re.test(par))s-=w*0.35});
+  const inPar=re=>pars.some(x=>re.test(x));                                  // 상위 그룹은 개별로 검사(앞뒤 고정 패턴도 맞도록)
+  (f.pos||[]).forEach(([re,w])=>{if(re.test(leaf))s+=w;else if(inPar(re))s+=w*0.6});
+  (f.neg||[]).forEach(([re,w])=>{if(re.test(leaf))s-=w;else if(inPar(re))s-=w*0.35});
   if(s<=0)return s;
   if(f.val){const sv=sampleVals(c,12);if(sv.length){let v=0;sv.forEach(x=>v+=f.val(x));s+=v/sv.length}else s-=3}
   return s;
@@ -813,6 +817,7 @@ function renderMap(){
     else if(sc>=9)badge='<span class="badge b-ok">양호</span>';
     else badge='<span class="badge b-warn">확인 필요</span>';
     if(dupOf.length)badge+=' <span class="badge b-bad" title="같은 열이 '+esc(dupOf.join(', '))+' 에도 매핑됨 — 운영평가서에 같은 값이 두 번 나오니 한쪽을 사용 해제하거나 다른 열로 바꾸세요">중복</span>';
+    if(f.key==='controlCode'&&c!=null&&DEND>=DSTART){const vals=[];for(let r=DSTART;r<=DEND;r++){const v=clean((FILLED[r]||GRID[r]||[])[c]);if(v)vals.push(v)}const uniq=new Set(vals).size;if(vals.length&&uniq<vals.length*0.8)badge+=' <span class="badge b-bad" title="이 열의 값이 '+vals.length+'행 중 '+uniq+'종류뿐입니다 — 통제활동 코드가 아닌 열(프로세스명 등)일 가능성이 큽니다">값 중복</span>'}
     let opts='<option value="">— 선택 안 함'+(f.derive?' (절차에서 추출)':'')+'</option>';
     for(let i=0;i<NCOL;i++){const h=headText(i);if(!h.leaf&&!h.parents.length&&!sampleVals(i,1).length)continue;
       opts+='<option value="'+i+'"'+(c===i?' selected':'')+'>'+esc(colLabel(i))+'</option>'}
@@ -935,12 +940,13 @@ document.getElementById('build').onclick=()=>{
   list.forEach(o=>{o.edited={};o.attrs=[];o.evidence=[];o.progress=DEF_PROGRESS;o.conclusion=DEF_CONCL;genTexts(o)});
   PROCS=buildProcs(list);MAP_DIRTY=false;
   if(!PROCS.length){alert('통제활동이 인식되지 않았습니다.');return}
+  {const d=assignSheetNames();if(d)alert('통제활동 코드가 중복된 통제가 '+d+'건 있습니다 — 「통제활동 코드」 매핑이 코드가 아닌 열(예: 프로세스명)을 가리키고 있지 않은지 확인하세요. 중복 통제는 시트명 뒤에 (2),(3)…을 붙여 생성됩니다.')}
   CURPROC=PROCS[0].code;SEL=0;
   document.getElementById('buildmsg').innerHTML='<div class="msg ok">통제 '+list.length+'건 · 프로세스 '+PROCS.length+'개 생성</div>';
   afterBuild();
 };
 document.getElementById('merge').onclick=()=>{
-  MAP_DIRTY=false;
+  MAP_DIRTY=false;setTimeout(()=>{if(PROCS.length)assignSheetNames()},0);
   const old={};PROCS.forEach(p=>p.ctrls.forEach(o=>old[o.controlCode]=o));
   const list=scanRCM();let upd=0,add=0;
   list.forEach(o=>{
@@ -1734,7 +1740,7 @@ function renderExport(){
     d.innerHTML='<strong>'+esc(fileNameOf(p))+'</strong><span>설계평가 '+p.ctrls.length+'건 · 요청증빙 시트 · 증빙 '+ev+'건'+
       (GRID.length&&NCOL?'':' · <b style="color:#9B2C2C">RCM 원본 없음</b>')+'</span>';
     const b=document.createElement('button');b.className='ghost';b.textContent='내보내기';
-    b.style.marginLeft='auto';b.onclick=()=>exportProc(p);
+    b.style.marginLeft='auto';b.onclick=async()=>{b.disabled=true;b.textContent='만드는 중…';const ok=await safeExport(p,document.getElementById('expmsg'));b.disabled=false;b.textContent=ok?'내보내기 ✓':'내보내기'};
     d.appendChild(b);box.appendChild(d);
   });
 }
@@ -1770,11 +1776,15 @@ function setFxHelp(){const h=document.getElementById('fxhelp');if(h)h.textConten
 document.getElementById('fxmode').onchange=e=>{FX_MODE=e.target.value;setFxHelp()};
 document.getElementById('fxtext').onchange=e=>{FX_TEXT=e.target.checked};
 setFxHelp();
+async function safeExport(p,m){
+  try{if(!PROCS.some(x=>x.ctrls.some(o=>o._sheet)))assignSheetNames();await exportProc(p);return true}
+  catch(err){console.error(err);const msg='내보내기 실패 ['+p.code+']: '+(err&&err.message?err.message:err);if(m)m.innerHTML='<span class="badge b-bad">'+esc(msg)+'</span>';alert(msg+'\n\n매핑(특히 통제활동 코드 열)과 RCM 시트명을 확인해 주세요.');return false}
+}
 document.getElementById('expAll').onclick=async()=>{
-  const m=document.getElementById('expmsg');
+  const m=document.getElementById('expmsg');let ok=0;
   for(let i=0;i<PROCS.length;i++){m.innerHTML='<span class="samp">'+(i+1)+'/'+PROCS.length+' 만드는 중…</span>';
-    await exportProc(PROCS[i]);await new Promise(r=>setTimeout(r,500))}
-  m.innerHTML='<span class="badge b-ok">'+PROCS.length+'개 파일 저장 완료</span>';
+    if(!(await safeExport(PROCS[i],m)))return;ok++;await new Promise(r=>setTimeout(r,500))}
+  m.innerHTML='<span class="badge b-ok">'+ok+'개 파일 저장 완료</span>';
 };
 const BORDER={top:{style:'thin',color:{argb:'FFC8D2D8'}},left:{style:'thin',color:{argb:'FFC8D2D8'}},
   bottom:{style:'thin',color:{argb:'FFC8D2D8'}},right:{style:'thin',color:{argb:'FFC8D2D8'}}};
@@ -1823,6 +1833,15 @@ function fxText(o,tmpl,refOf){                 // 템플릿 문구를 RCM 참조
   return ok&&f.length<8000?f:null;
 }
 const qs=n=>"'"+String(n).replace(/'/g,"''")+"'";   // 시트명 인용
+function sname(o){return o._sheet||String(o.controlCode||'통제').replace(/[\[\]:*?\/\\]/g,'_').substring(0,31)}   // 통제 시트명(생성 시 유일화)
+function psname(o){return o._psheet||('P_'+sname(o)).substring(0,31)}
+function assignSheetNames(){                   // 통제코드 중복·금지문자·31자 초과를 피해 시트명 배정
+  const used=new Set();let dup=0;
+  PROCS.forEach(p=>p.ctrls.forEach(o=>{let base=String(o.controlCode||'통제').replace(/[\[\]:*?\/\\]/g,'_').substring(0,31)||'통제';let nm=base,k=2;
+    while(used.has(nm.toLowerCase())){dup++;const suf='('+k+')';nm=base.substring(0,31-suf.length)+suf;k++}used.add(nm.toLowerCase());o._sheet=nm}));
+  PROCS.forEach(p=>p.ctrls.forEach(o=>{let base=('P_'+o._sheet).substring(0,31),nm=base,k=2;while(used.has(nm.toLowerCase())){const suf='('+k+')';nm=base.substring(0,31-suf.length)+suf;k++}used.add(nm.toLowerCase());o._psheet=nm}));
+  return dup;
+}
 const hlink=(sheet,text)=>({formula:'HYPERLINK("#'+qs(sheet).replace(/"/g,'""')+'!A1","'+String(text).replace(/"/g,'""')+'")',result:String(text)});   // 내부 링크: 관계(rels) 없이 수식으로
 
 async function openBook(p){                   // RCM 시트 준비 + 수식 헬퍼 (설계평가·운영평가 공용)
@@ -1908,7 +1927,7 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
       ws.properties.outlineProperties={summaryBelow:false};
     }
     // 이 프로세스의 시트가 원본에 이미 있으면(재내보내기) 교체
-    ['설계평가','요청증빙','운영평가','샘플 Guide','주기성 샘플링','RCM참조','샘플요청'].concat(p.ctrls.map(o=>o.controlCode.substring(0,31))).concat(p.ctrls.map(o=>('P_'+o.controlCode).substring(0,31))).forEach(dropSheet);
+    ['설계평가','요청증빙','운영평가','샘플 Guide','주기성 샘플링','RCM참조','샘플요청'].concat(p.ctrls.map(o=>sname(o))).concat(p.ctrls.map(o=>psname(o))).forEach(dropSheet);
   }else{
     const rcm=wb.addWorksheet('RCM',hasRCM?{views:[{state:'frozen',ySplit:DSTART}]}:{});
     if(!hasRCM){
@@ -1965,7 +1984,7 @@ function writeReqSheet(wb,p,fx){
     const r=rq.getRow(6+i),anc='$C'+(6+i);
     const vals=[i+1,null,fx(o,'controlName',o.controlName,anc),fx(o,'controlDesc',o.controlDesc,anc),amLabel(o),shortFreq(o.frequency||''),
       evLabel(o.evType),o.reqPop||'',o.reqSample||'',o.reqNote||'',o.recv||'미입수',''];
-    vals.forEach((v,k)=>{const c=r.getCell(2+k);if(k===1){c.value=hlink(o.controlCode.substring(0,31),o.controlCode);
+    vals.forEach((v,k)=>{const c=r.getCell(2+k);if(k===1){c.value=hlink(sname(o),o.controlCode);
         c.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};c.alignment={vertical:'top'};c.border=BORDER}
       else{c.value=v;styleVal(c)}});
     r.getCell(2).alignment={vertical:'top',horizontal:'center'};
@@ -2007,10 +2026,10 @@ async function exportProc(p){
     [['controlName',o.controlName],['keyControl',o.keyControl],['frequency',o.frequency]]
       .forEach(([k2,v],k)=>{const c=r.getCell(3+k);c.value=fx(o,k2,v,anc);styleVal(c)});
     const lk=r.getCell(6);
-    lk.value=hlink(o.controlCode.substring(0,31),o.controlCode);
+    lk.value=hlink(sname(o),o.controlCode);
     lk.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};lk.border=BORDER;
     const cp=r.getCell(7);cp.value=o.progress;styleVal(cp);cp.dataValidation=dvList(OPT_PROG);
-    const cc=r.getCell(8);cc.value={formula:'IF('+qs(o.controlCode.substring(0,31))+'!$D$'+R(22)+'="","",'+qs(o.controlCode.substring(0,31))+'!$D$'+R(22)+')',result:o.conclusion||null};styleVal(cc);   // 통제 시트의 결론을 집계
+    const cc=r.getCell(8);cc.value={formula:'IF('+qs(sname(o))+'!$D$'+R(22)+'="","",'+qs(sname(o))+'!$D$'+R(22)+')',result:o.conclusion||null};styleVal(cc);   // 통제 시트의 결론을 집계
     XI.forEach((x,k)=>{const c=r.getCell(9+k);c.value=fx(o,x.key,o[x.key]||'',anc);styleVal(c)});
   });
   [18,44,14,20,20,26,16].concat(XI.map(()=>24)).forEach((w,i)=>idx.getColumn(2+i).width=w);
@@ -2023,7 +2042,7 @@ async function exportProc(p){
 
   /* 시트4~ : 통제별 */
   p.ctrls.forEach(o=>{
-    const ws=wb.addWorksheet(o.controlCode.substring(0,31));
+    const ws=wb.addWorksheet(sname(o));
     ws.getColumn(1).width=8.4;ws.getColumn(2).width=28.2;ws.getColumn(3).width=33;ws.getColumn(4).width=90;
     const put=(r,label,key)=>{const b=ws.getCell(r,2);b.value=label;styleLabel(b);ws.mergeCells(r,2,r,3);
       const d=ws.getCell(r,4);d.value=fx(o,key,o[key]);styleVal(d);if(!used(key))ws.getRow(r).hidden=true};
@@ -2115,9 +2134,9 @@ async function exportProcTOE(p){
     const r=idx.getRow(7+i),anc='$B'+(7+i),c=toeCalc(o),t=toeOf(o);
     const vals=[o.controlCode,fx(o,'controlName',o.controlName,anc),fx(o,'keyControl',o.keyControl,anc),fx(o,'frequency',o.frequency,anc),
       amLabel(o),c.lv,c.annual,c.n,t.method||(c.auto?'해당없음(자동통제)':'무작위 추출'),null,t.prog||OPT_TPROG[0],t.result||'Effective'];
-    vals.forEach((v,k)=>{const cell=r.getCell(2+k);if(k===9){cell.value=hlink(o.controlCode.substring(0,31),o.controlCode);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
+    vals.forEach((v,k)=>{const cell=r.getCell(2+k);if(k===9){cell.value=hlink(sname(o),o.controlCode);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
     r.getCell(12).dataValidation=dvList(OPT_TPROG);r.getCell(13).dataValidation=dvList(OPT_TOE_RESULT);
-    const mc=r.getCell(14);if(c.cls==='event'){const nm=('P_'+o.controlCode).substring(0,31);mc.value=hlink(nm,nm);mc.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{mc.value=c.auto?'N/A':'주기성 샘플링';styleVal(mc)}mc.border=BORDER;
+    const mc=r.getCell(14);if(c.cls==='event'){const nm=psname(o);mc.value=hlink(nm,nm);mc.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{mc.value=c.auto?'N/A':'주기성 샘플링';styleVal(mc)}mc.border=BORDER;
     if(PREV1&&TOE.round==='2'){const pc=PREV1.ctrls[o.controlCode];const c1=r.getCell(15);c1.value=pc?(pc.concl.result||''):'(1차 없음)';styleVal(c1)}
   });
   [18,40,10,14,12,10,9,11,14,18,22,16,18,14].forEach((w,i)=>idx.getColumn(2+i).width=w);idx.getColumn(1).width=3;
@@ -2175,7 +2194,7 @@ async function exportProcTOE(p){
 
   /* 건별 통제 모집단 시트 — 통제 시트 바로 뒤에 생성 (아래 통제 루프에서 호출) */
   const popRef={},PMAX=19+(TOE.popRows||1000);                   // 통제코드 → 시트명
-  p.ctrls.forEach(o=>{if(toeCalc(o).cls==='event')popRef[o.controlCode]=('P_'+o.controlCode).substring(0,31)});
+  p.ctrls.forEach(o=>{if(toeCalc(o).cls==='event')popRef[o.controlCode]=psname(o)});
   const makePopSheet=o=>{
     const c=toeCalc(o);if(c.cls!=='event')return;
     const t=toeOf(o),name=popRef[o.controlCode];
@@ -2234,7 +2253,7 @@ async function exportProcTOE(p){
   Object.values(groups).forEach(g=>{const L=periodList(g.cls);META.periodicSel[g.cls+'|'+g.lv]=perSelection(g.cls,g.lv,g.n).map(i=>L[i])});
   const MERGE=PREV1&&TOE.round==='2'?PREV1:null;
   p.ctrls.forEach(o=>{
-    const ws=wb.addWorksheet(o.controlCode.substring(0,31));
+    const ws=wb.addWorksheet(sname(o));
     const prev=MERGE?MERGE.ctrls[o.controlCode]:null;const mrec={sheet:ws.name,evCols:evColsOf(o).map(x=>x.label),conclKeys:['result','opinion','exception','defClass','comp','recur','followup']};
     [26.7,25.9,15.5,15.5,15.5,15.5,15.5,15.5,15.5].forEach((w,i)=>ws.getColumn(1+i).width=w);
     const c=toeCalc(o),t=toeOf(o);
@@ -2407,7 +2426,7 @@ async function exportProcTOEYear(p){
   const IH=[L('controlCode'),L('controlName'),L('keyControl'),L('frequency'),'자동/수동','위험수준','연간 샘플','선정 방법','Link','진행현황','1차 결론','2차 결론','연간 결론','모집단·샘플'];
   IH.forEach((h,i)=>{const c=idx.getRow(6).getCell(2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
   const lastIdx=6+p.ctrls.length;
-  const popRef={};p.ctrls.forEach(o=>{if(toeCalc(o).cls==='event')popRef[o.controlCode]=('P_'+o.controlCode).substring(0,31)});
+  const popRef={};p.ctrls.forEach(o=>{if(toeCalc(o).cls==='event')popRef[o.controlCode]=psname(o)});
 
   writeReqSheet(wb,p,fx);
 
@@ -2551,7 +2570,7 @@ async function exportProcTOEYear(p){
 
   /* 통제별 운영평가서 (1차·2차 블록 + 연간 결론) */
   p.ctrls.forEach((o,oi)=>{
-    const ws=wb.addWorksheet(o.controlCode.substring(0,31));
+    const ws=wb.addWorksheet(sname(o));
     [26.7,25.9,15.5,15.5,15.5,15.5,15.5,15.5,15.5].forEach((w,i)=>ws.getColumn(1+i).width=w);
     const c=toeCalc(o),t=toeOf(o);
     const pn=popRef[o.controlCode],PQ=pn?"'"+pn.replace(/'/g,"''")+"'":null,pref=perRef[c.cls+'|'+c.lv];const conclRows={};
@@ -2656,7 +2675,7 @@ async function exportProcTOEYear(p){
     const vals=[o.controlCode,fx(o,'controlName',o.controlName,anc),fx(o,'keyControl',o.keyControl,anc),fx(o,'frequency',o.frequency,anc),amLabel(o),c.lv,
       c.auto?1:PQ?{formula:PQ+'!$C$8',result:c.annual}:pref?{formula:pref.nA,result:c.annual}:c.annual,t.method||(c.auto?'해당없음(자동통제)':'무작위 추출'),null,t.prog||OPT_TPROG[0],
       ...['r1','r2','year'].map(k=>conclRows[k]?{formula:'IF('+qs(ws.name)+'!$C$'+conclRows[k]+'="","",'+qs(ws.name)+'!$C$'+conclRows[k]+')',result:'Effective'}:''),null];
-    vals.forEach((v,kk)=>{const cell=ir.getCell(2+kk);if(kk===8){cell.value=hlink(o.controlCode.substring(0,31),o.controlCode);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else if(kk===13){if(pn){cell.value=hlink(pn,pn);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{cell.value=c.auto?'N/A':'주기성 샘플링';styleVal(cell)}cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
+    vals.forEach((v,kk)=>{const cell=ir.getCell(2+kk);if(kk===8){cell.value=hlink(sname(o),o.controlCode);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else if(kk===13){if(pn){cell.value=hlink(pn,pn);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{cell.value=c.auto?'N/A':'주기성 샘플링';styleVal(cell)}cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
     ir.getCell(11).dataValidation=dvList(OPT_TPROG);   // 결론 3열은 통제 시트에서 입력한 값을 집계(수식)
   });
   [18,40,10,14,12,10,9,14,18,20,12,12,12,18].forEach((w,i)=>idx.getColumn(2+i).width=w);idx.getColumn(1).width=3;
@@ -2701,7 +2720,7 @@ async function exportProcTOEYear(p){
     sq.autoFilter={from:{row:6,column:2},to:{row:Math.max(7,r-1),column:1+H.length}};
     sq.addConditionalFormatting({ref:'B7:'+colName(1+H.length)+Math.max(7,r-1),rules:[{type:'expression',formulae:['$F7<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFFBEB'}}}}]});
   }
-  {dropSheet('_toe_meta');const ms=wb.addWorksheet('_toe_meta',{state:'hidden'});const META={version:2,mode:'year',round:'year',from,to,r1To,closing:TOE.closing,popRows:TOE.popRows||1000,controls:{}};p.ctrls.forEach(o=>{META.controls[o.controlCode]={sheet:o.controlCode.substring(0,31),pop:popRef[o.controlCode]||null,cls:toeCalc(o).cls,lv:toeCalc(o).lv}});const js=JSON.stringify(META);for(let i=0,r=1;i<js.length;i+=30000,r++)ms.getCell(r,1).value=js.slice(i,i+30000)}
+  {dropSheet('_toe_meta');const ms=wb.addWorksheet('_toe_meta',{state:'hidden'});const META={version:2,mode:'year',round:'year',from,to,r1To,closing:TOE.closing,popRows:TOE.popRows||1000,controls:{}};p.ctrls.forEach(o=>{META.controls[o.controlCode]={sheet:sname(o),pop:popRef[o.controlCode]||null,cls:toeCalc(o).cls,lv:toeCalc(o).lv}});const js=JSON.stringify(META);for(let i=0,r=1;i<js.length;i+=30000,r++)ms.getCell(r,1).value=js.slice(i,i+30000)}
   await finishBook(p,wb,useOrig);
 }
 </script>
