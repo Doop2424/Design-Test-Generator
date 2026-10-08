@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root{
     --paper:#EDF1F3; --panel:#FFFFFF; --ink:#12222B; --muted:#5E7480;
@@ -125,7 +126,7 @@
     <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
     <button class="ghost" id="loadProjTop">불러오기</button>
     <span class="samp" id="saveStat" style="max-width:none"></span>
-    <div class="stage">v3.3</div>
+    <div class="stage">v4.1</div>
   </div>
 </header>
 
@@ -281,7 +282,7 @@
     <div class="flexspace"></div>
     <label class="f" style="flex-direction:row;align-items:center;gap:6px">난수 seed<input type="number" id="toeSeed" style="width:90px"></label>
     <label class="f" style="flex-direction:row;align-items:center;gap:6px">건별 증빙표 최대 행<input type="number" id="toeMaxRows" min="1" max="60" style="width:60px"></label>
-    <label class="f" style="flex-direction:row;align-items:center;gap:6px" title="모집단 시트 데이터 행 수(수식 행). 발생건수가 적은 프로세스는 줄이면 파일이 가벼워짐">모집단 시트 행<input type="number" id="toePopRows" min="100" max="5000" step="100" style="width:70px"></label>
+    <label class="f" style="flex-direction:row;align-items:center;gap:6px" title="모집단 시트에 미리 수식을 채워 둘 행 수(기본 1,000). 실제 모집단이 더 많으면 엑셀에서 마지막 수식 행을 채우기 핸들 더블클릭으로 늘리면 되므로 크게 잡을 필요 없음">모집단 시트 행<input type="number" id="toePopRows" min="100" max="20000" step="100" style="width:80px"></label>
     <button class="ghost" id="holidayBtn">휴일 목록</button>
     <button id="prevFileBtn" style="display:none" title="이 툴로 만든 1차 운영평가 파일(xlsx)을 읽어 1차 결과·모집단·선정을 2차 파일에 병합">1차 파일 불러오기 (2차 병합)</button><input type="file" id="prevFile" accept=".xlsx" style="display:none">
     <button class="ghost" id="clearPrev" style="display:none" title="저장된 1차 선정 정보 삭제">1차 정보 지우기</button>
@@ -1476,7 +1477,7 @@ document.getElementById('clearPrev').onclick=()=>{if(TOE.prev&&confirm('1차 선
 document.getElementById('perResel').onclick=()=>{Object.keys(TOE.periodic||{}).forEach(k=>delete TOE.periodic[k]);renderPeriodic()};
 document.getElementById('toeSeed').onchange=e=>{TOE.seed=+e.target.value||1;Object.keys(TOE.periodic||{}).forEach(k=>{if(!TOE.periodic[k].manual)delete TOE.periodic[k]});renderPeriodic()};
 document.getElementById('toeMaxRows').onchange=e=>{TOE.maxRows=Math.min(60,Math.max(1,+e.target.value||60))};
-document.getElementById('toePopRows').onchange=e=>{TOE.popRows=Math.min(5000,Math.max(100,+e.target.value||1000))};
+document.getElementById('toePopRows').onchange=e=>{TOE.popRows=Math.min(20000,Math.max(100,+e.target.value||1000))};
 function renderEvColsInto(T,cols,onChange,fixedNote){
   T.innerHTML='<tr><th>#</th><th>열 이름</th><th>연결 열(모집단 시트의 열 이름)</th><th></th></tr>'+
     '<tr><td>-</td><td class="samp">no.</td><td class="samp">고정</td><td></td></tr>'+
@@ -1533,8 +1534,8 @@ function renderTOE(){
   PROCS.forEach(p=>{const b=document.createElement('div');b.className='tab'+(p.code===CURPROC?' on':'');b.textContent=p.code+(p.name?' '+p.name:'')+' ('+p.ctrls.length+')';
     b.onclick=()=>{CURPROC=p.code;SEL=0;renderEval();renderReq();renderTOE()};tabs.appendChild(b)});
   const p=curProc();if(!p)return;
-  document.getElementById('toehead').innerHTML=['#','통제활동 코드','통제활동명','주기 · 분류','자동/수동','위험수준','기간 모집단 수','연간 샘플','차수 샘플('+roundName()+')','선정 방법','증빙표 열','산정 근거']
-    .map((h,i)=>'<th style="width:'+[30,110,170,110,80,110,110,70,110,120,90,200][i]+'px">'+esc(h)+'</th>').join('');
+  document.getElementById('toehead').innerHTML=['#','통제활동 코드','통제활동명','주기 · 분류','자동/수동','위험수준','기간 모집단 수','연간 샘플','차수 샘플('+roundName()+')','선정 방법','증빙표 열','모집단 행','산정 근거']
+    .map((h,i)=>'<th style="width:'+[30,110,170,110,80,110,110,70,110,120,90,80,200][i]+'px">'+esc(h)+'</th>').join('');
   const tb=document.getElementById('toerows');tb.innerHTML='';
   p.ctrls.forEach((o,i)=>{
     const c=toeCalc(o),t=toeOf(o);
@@ -1548,9 +1549,10 @@ function renderTOE(){
       '<td><input type="number" min="0" max="60" style="width:70px" data-n="'+i+'" value="'+(t.n!=null?t.n:'')+'" placeholder="'+(c.n!=null?c.n:'')+'">'+(t.n!=null?'<div class="samp" style="font-size:10.5px">직접 지정</div>':'')+'</td>'+
       '<td>'+selHTML(['무작위 추출','체계적 추출','판단 추출','전수 테스트','해당없음(자동통제)'],t.method||(c.auto?'해당없음(자동통제)':(c.cap!=null&&c.n!=null&&c.n>=c.cap?'전수 테스트':'무작위 추출')),'data-m="'+i+'"')+'</td>'+
       '<td><button class="ghost tiny" data-ev="'+i+'">'+(t.evCols&&t.evCols.length?'개별('+t.evCols.length+')':'기본('+TOE.evCols.length+')')+'</button></td>'+
+      '<td>'+(c.cls==='event'?'<input type="number" min="100" max="50000" step="100" style="width:70px" data-pr="'+i+'" value="'+(t.popRows||'')+'" placeholder="'+(TOE.popRows||1000)+'" title="미리 수식을 채워 둘 행 수(비우면 기본값). 모집단이 더 많아도 엑셀에서 채우기 핸들로 늘리면 됨">':'<span class="samp">—</span>')+'</td>'+
       '<td class="samp">'+esc(c.note)+(c.cls==='event'&&c.pop==null?'<br>엑셀 모집단 시트에 붙여넣으면 수식으로 산정':'')+'</td>';
     tb.appendChild(tr);
-    if(t.evOpen){const er=document.createElement('tr');er.innerHTML='<td></td><td colspan="11" style="background:#FAFCFD"><div class="row" style="align-items:center;margin-bottom:6px"><b style="font-size:12px">'+esc(o.controlCode)+' 증빙평가 표 열</b><span class="samp">개별 설정은 이 통제에만 적용 · 비우면 기본 열 사용</span><div class="flexspace"></div><button class="ghost tiny" data-evadd="'+i+'">+ 열 추가</button><button class="ghost tiny" data-evdef="'+i+'">기본으로</button><button class="ghost tiny" data-evclose="'+i+'">닫기</button></div><table class="req" style="min-width:0;width:auto" id="evc_'+i+'"></table></td>';tb.appendChild(er)}
+    if(t.evOpen){const er=document.createElement('tr');er.innerHTML='<td></td><td colspan="12" style="background:#FAFCFD"><div class="row" style="align-items:center;margin-bottom:6px"><b style="font-size:12px">'+esc(o.controlCode)+' 증빙평가 표 열</b><span class="samp">개별 설정은 이 통제에만 적용 · 비우면 기본 열 사용</span><div class="flexspace"></div><button class="ghost tiny" data-evadd="'+i+'">+ 열 추가</button><button class="ghost tiny" data-evdef="'+i+'">기본으로</button><button class="ghost tiny" data-evclose="'+i+'">닫기</button></div><table class="req" style="min-width:0;width:auto" id="evc_'+i+'"></table></td>';tb.appendChild(er)}
   });
   p.ctrls.forEach((o,i)=>{const t=toeOf(o);if(!t.evOpen)return;const T=document.getElementById('evc_'+i);if(!t.evCols||!t.evCols.length)t.evCols=TOE.evCols.map(x=>Object.assign({},x));
     renderEvColsInto(T,t.evCols,re=>{if(re)renderTOE()})});
@@ -1562,6 +1564,7 @@ function renderTOE(){
   tb.querySelectorAll('input[data-pop]').forEach(el=>el.onchange=e=>{toeOf(p.ctrls[+e.target.dataset.pop]).pop=e.target.value===''?null:+e.target.value;renderTOE()});
   tb.querySelectorAll('input[data-n]').forEach(el=>el.onchange=e=>{toeOf(p.ctrls[+e.target.dataset.n]).n=e.target.value===''?null:+e.target.value;renderTOE()});
   tb.querySelectorAll('select[data-m]').forEach(el=>el.onchange=e=>{toeOf(p.ctrls[+e.target.dataset.m]).method=e.target.value});
+  tb.querySelectorAll('input[data-pr]').forEach(el=>el.onchange=e=>{const t=toeOf(p.ctrls[+e.target.dataset.pr]);t.popRows=e.target.value===''?null:Math.min(50000,Math.max(100,+e.target.value))});
   renderPeriodic();
 }
 
@@ -1650,7 +1653,7 @@ document.getElementById('reqExportAll').onclick=async()=>{
   }));
   [5,14,16,26,52,12,10,11,10,13,40,48,22,10,11].forEach((w,i)=>rq.getColumn(2+i).width=w);rq.getColumn(1).width=3;
   if(n)rq.autoFilter={from:{row:5,column:2},to:{row:5+n,column:1+RH.length}};
-  const buf=await wb.xlsx.writeBuffer();
+  const buf=await fixXlsx(await wb.xlsx.writeBuffer());
   const nm=fmtFileName({code:'요청증빙',name:''}).replace(/설계평가_/,'');
   dl(nm,new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
 };
@@ -1833,6 +1836,37 @@ function fxText(o,tmpl,refOf){                 // 템플릿 문구를 RCM 참조
   return ok&&f.length<8000?f:null;
 }
 const qs=n=>"'"+String(n).replace(/'/g,"''")+"'";   // 시트명 인용
+/* ── xlsx 후처리: ExcelJS가 쓴 데이터 유효성 범위가 겹치면(행 자릿수 경계 버그·원본 중복) Excel 복구 메시지가 뜸 → 시트 XML에서 겹침 제거 ── */
+async function fixXlsx(buf){
+  if(typeof JSZip==='undefined')return buf;
+  try{
+    const zip=await JSZip.loadAsync(buf);let changed=0;
+    const rc=ref=>{const m=ref.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/);if(!m)return null;const c=s=>{let n=0;for(const ch of s)n=n*26+(ch.charCodeAt(0)-64);return n};
+      return {c1:c(m[1]),r1:+m[2],c2:m[3]?c(m[3]):c(m[1]),r2:m[4]?+m[4]:+m[2]}};
+    const ov=(a,b)=>!(a.c2<b.c1||b.c2<a.c1||a.r2<b.r1||b.r2<a.r1);
+    const within=(a,b)=>a.c1>=b.c1&&a.c2<=b.c2&&a.r1>=b.r1&&a.r2<=b.r2;
+    for(const name of Object.keys(zip.files)){
+      if(!/^xl\/worksheets\/sheet\d+\.xml$/.test(name))continue;
+      let xml=await zip.file(name).async('string');
+      const n0=xml.length;xml=xml.replace(/<v>(?:NaN|-?Infinity)<\/v>/g,'');if(xml.length!==n0){changed++;zip.file(name,xml)}   // 원본 수식의 캐시값이 NaN으로 읽힌 셀 → Excel이 '셀 정보' 손상으로 봄
+      const m=xml.match(/<dataValidations[^>]*>([\s\S]*?)<\/dataValidations>/);if(!m)continue;
+      const items=[...m[1].matchAll(/<dataValidation\b([^>]*)>([\s\S]*?)<\/dataValidation>/g)].map(x=>{const attrs=x[1],inner=x[2];const sq=(attrs.match(/sqref="([^"]*)"/)||[])[1]||'';
+        return {attrs:attrs.replace(/\s*sqref="[^"]*"/,''),inner:inner.replace(/<formula2>0<\/formula2>/,''),rects:sq.split(/\s+/).filter(Boolean).map(r=>({ref:r,b:rc(r)})).filter(r=>r.b)}});
+      const key=it=>it.attrs.trim()+'|'+it.inner.trim();
+      // 겹침 해소: 같은 내용이면 포함되는 쪽 제거, 다른 내용이면 나중 것의 겹치는 범위 제거
+      for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
+        const A=items[i],B=items[j];if(!A.rects.length||!B.rects.length)continue;
+        const same=key(A)===key(B);
+        B.rects=B.rects.filter(rb=>{const hit=A.rects.some(ra=>ov(ra.b,rb.b));if(!hit)return true;if(same&&A.rects.some(ra=>within(rb.b,ra.b))){changed++;return false}if(same){/* 부분 겹침: A가 B 안에 들어가면 A 제거 */const ia=A.rects.findIndex(ra=>within(ra.b,rb.b));if(ia>=0){A.rects.splice(ia,1);changed++;return true}}changed++;return false});
+      }
+      const kept=items.filter(it=>it.rects.length);
+      const out='<dataValidations count="'+kept.length+'">'+kept.map(it=>'<dataValidation'+it.attrs+' sqref="'+it.rects.map(r=>r.ref).join(' ')+'">'+it.inner+'</dataValidation>').join('')+'</dataValidations>';
+      xml=xml.replace(m[0],kept.length?out:'');zip.file(name,xml);
+    }
+    if(!changed)return buf;console.log('데이터 유효성 겹침 '+changed+'건 정리');
+    return await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
+  }catch(e){console.warn('xlsx 후처리 실패(원본 그대로 저장)',e);return buf}
+}
 function sname(o){return o._sheet||String(o.controlCode||'통제').replace(/[\[\]:*?\/\\]/g,'_').substring(0,31)}   // 통제 시트명(생성 시 유일화)
 function psname(o){return o._psheet||('P_'+sname(o)).substring(0,31)}
 function assignSheetNames(){                   // 통제코드 중복·금지문자·31자 초과를 피해 시트명 배정
@@ -1847,7 +1881,22 @@ const hlink=(sheet,text)=>({formula:'HYPERLINK("#'+qs(sheet).replace(/"/g,'""')+
 async function openBook(p){                   // RCM 시트 준비 + 수식 헬퍼 (설계평가·운영평가 공용)
   const useOrig=RCM_MODE!=='rebuild'&&RAW_BUF&&RAW_XLSX;
   const wb=new ExcelJS.Workbook();
-  if(useOrig){try{await wb.xlsx.load(RAW_BUF)}catch(err){alert('원본 파일을 열지 못해 새로 그리기 방식으로 내보냅니다: '+err.message);await exportProcRebuild(p);return null}}
+  if(useOrig){try{await wb.xlsx.load(RAW_BUF)}catch(err){alert('원본 파일을 열지 못해 새로 그리기 방식으로 내보냅니다: '+err.message);await exportProcRebuild(p);return null}
+    try{                                                   // 원본의 정의된 이름 중 외부 참조·시트 없는 범위 등 깨진 것 제거 (Excel 복구 메시지 원인)
+      const sheetsLC=new Set(wb.worksheets.map(w=>w.name.toLowerCase()));
+      const okRange=r=>{const m=String(r).match(/^(?:'((?:[^']|'')+)'|([^'!\[\]"]+))!(\$?[A-Z]{1,3}\$?\d{1,7}(?::\$?[A-Z]{1,3}\$?\d{1,7})?|\$?[A-Z]{1,3}:\$?[A-Z]{1,3}|\$?\d{1,7}:\$?\d{1,7})$/);
+        if(!m)return false;const sn=(m[1]||m[2]).replace(/''/g,"'");return sheetsLC.has(sn.toLowerCase())};
+      const before=wb.definedNames.model.length;
+      wb.definedNames.model=wb.definedNames.model.filter(d=>!/^_xlnm\._FilterDatabase/i.test(d.name)&&d.ranges&&d.ranges.length&&d.ranges.every(okRange));
+      const dropped=before-wb.definedNames.model.length;if(dropped)console.log('정의된 이름 '+dropped+'개 제거(외부 참조·깨진 범위)');
+    }catch(e){console.warn('definedNames 정리 실패',e)}
+    try{                                                   // 원본 시트의 조건부 서식 중 ExcelJS가 내용을 잃는 확장(x14) 유형(containsText 등)은 깨진 채 저장되어 Excel 복구 메시지를 유발 → 제거
+      const KEEP=new Set(['cellIs','expression','colorScale','top10','aboveAverage','duplicateValues','uniqueValues']);let cut=0;
+      wb.worksheets.forEach(w=>{const arr=w.conditionalFormattings;if(!arr||!arr.length)return;
+        for(let i=arr.length-1;i>=0;i--){const cf=arr[i];const rules=(cf.rules||[]).filter(r=>KEEP.has(r.type)&&!(r.type==='expression'&&!(r.formulae&&r.formulae.length))&&!(r.type==='cellIs'&&!(r.formulae&&r.formulae.length)));
+          cut+=(cf.rules||[]).length-rules.length;if(rules.length)cf.rules=rules;else arr.splice(i,1)}});
+      if(cut)console.log('조건부 서식 규칙 '+cut+'개 제거(저장 시 깨지는 유형)');
+    }catch(e){console.warn('conditionalFormattings 정리 실패',e)}}
   const RCMS=useOrig?qs(SHEET_NAME):qs('RCM');
   const rcmRow=new Map();                     // 통제 → RCM 시트의 행번호
   const keyCol=MAP.controlCode!=null?colName(MAP.controlCode):null;
@@ -1967,7 +2016,7 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
 }
 async function finishBook(p,wb,useOrig){
   if(useOrig){const ws=wb.getWorksheet(SHEET_NAME);if(ws)wb.views=[{firstSheet:0,activeTab:wb.worksheets.indexOf(ws)}]}
-  const buf=await wb.xlsx.writeBuffer();
+  const buf=await fixXlsx(await wb.xlsx.writeBuffer());
   dl(fileNameOf(p),new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
 }
 function writeReqSheet(wb,p,fx){
@@ -2426,7 +2475,8 @@ async function exportProcTOEYear(p){
   const IH=[L('controlCode'),L('controlName'),L('keyControl'),L('frequency'),'자동/수동','위험수준','연간 샘플','선정 방법','Link','진행현황','1차 결론','2차 결론','연간 결론','모집단·샘플'];
   IH.forEach((h,i)=>{const c=idx.getRow(6).getCell(2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
   const lastIdx=6+p.ctrls.length;
-  const popRef={};p.ctrls.forEach(o=>{if(toeCalc(o).cls==='event')popRef[o.controlCode]=psname(o)});
+  const D0=22,HDRROW=21,END=1048576;const popMaxOf=o=>HDRROW+((o&&o.toe&&o.toe.popRows)||TOE.popRows||1000);const PMAXBY={};
+  const popRef={};p.ctrls.forEach(o=>{if(toeCalc(o).cls==='event'){popRef[o.controlCode]=psname(o);PMAXBY[psname(o)]=popMaxOf(o)}});
 
   writeReqSheet(wb,p,fx);
 
@@ -2444,7 +2494,7 @@ async function exportProcTOEYear(p){
   TOE.guide.event.forEach((b,i)=>{const row=g.getRow(22+i);const lab=b.max==null?lo+' 이상':(lo===b.max?String(lo):lo+' ~ '+b.max);[lab,lo,b.max==null?999999999:b.max].concat(b.n).forEach((v,j)=>{const c=row.getCell(2+j);c.value=v;styleVal(c)});if(b.max!=null)lo=b.max+1});
   // 휴일 목록 (J열)
   {const hc=g.getCell('J11');hc.value='휴일(일별·주별 모집단 제외, 수정 가능)';styleLabel(hc);const hs=[...holidaySet()].sort();hs.forEach((d,i)=>{const c=g.getCell(12+i,10);c.value=new Date(d);c.numFmt='yyyy-mm-dd';styleVal(c)});g.getColumn(10).width=16;
-   g.getCell('J'+(12+Math.max(hs.length,1)+1)).value=TOE.holidayMode==='weekend'?'(토·일만 제외 설정 — 필요하면 위에 날짜 추가)':'다른 연도의 설·추석 등은 여기에 추가';g.getCell('J'+(12+Math.max(hs.length,1)+1)).font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
+   const nc=g.getCell('K12');nc.value=TOE.holidayMode==='weekend'?'← 토·일만 제외 설정. 필요하면 J열에 날짜 추가(J열에는 날짜만, 문자 금지)':'← J열에는 날짜만 입력(문자가 있으면 일별·주별 수식이 #VALUE!). 다른 연도의 설·추석 등은 아래에 추가';nc.font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};g.getColumn(11).width=40}
   [26,12,12,10,10,10].forEach((w,i)=>g.getColumn(2+i).width=w);g.getColumn(1).width=3;
   const annualEventFx=(lvCell,yrCell)=>'INDEX('+G+'!$E$'+EV0+':$G$'+EV1+',MATCH('+yrCell+','+G+'!$C$'+EV0+':$C$'+EV1+',1),'+lvMatch(lvCell)+')';
 
@@ -2519,19 +2569,19 @@ async function exportProcTOEYear(p){
   }
 
   /* 건별 모집단 시트 (1차/2차 수식) */
-  const D0=22,HDRROW=21,PMAX=HDRROW+(TOE.popRows||1000);
+  
   const makePopSheet=o=>{
     const c=toeCalc(o);if(c.cls!=='event')return;
-    const t=toeOf(o),name=popRef[o.controlCode];dropSheet(name);
+    const t=toeOf(o),name=popRef[o.controlCode];dropSheet(name);const PMAX=popMaxOf(o);PMAXBY[name]=PMAX;
     const ws=wb.addWorksheet(name,{views:[{state:'frozen',ySplit:HDRROW}]});
     ws.getCell('B1').value='모집단 · 샘플 선정 (연간 통합) — '+o.controlCode+' '+(o.controlName||'');ws.getCell('B1').font={name:'맑은 고딕',size:13,bold:true};
-    ws.getCell('F1').value='① '+D0+'행부터 F열 이후에 모집단을 붙여넣기 (연간 전체 또는 1차분 먼저, 2차분은 뒤에 이어서) — '+HDRROW+'행 헤더 이름은 증빙평가 표 「연결 열」과 같아야 함 ② 일자 열 값이 1차 종료일 이하면 1차, 이후면 2차로 자동 구분 ③ A열=1차 샘플No, B열=2차 샘플No가 자동으로 붙고 통제 시트에 반영됩니다. 1차 완료 후 D17에 1차 샘플수를 확정해 두면 2차 때 모집단이 늘어도 1차 선정이 바뀌지 않습니다.';
+    ws.getCell('F1').value='① '+D0+'행부터 F열 이후에 모집단을 붙여넣기 (연간 전체 또는 1차분 먼저, 2차분은 뒤에 이어서) — '+HDRROW+'행 헤더 이름은 증빙평가 표 「연결 열」과 같아야 함 ② 일자 열 값이 1차 종료일 이하면 1차, 이후면 2차로 자동 구분 ③ A열=1차 샘플No, B열=2차 샘플No가 자동으로 붙고 통제 시트에 반영. ④ 모집단이 수식이 채워진 행('+(PMAX-HDRROW)+'행)보다 많으면: 마지막 수식 행의 A~E열·AB~AC열을 선택해 채우기 핸들을 더블클릭(데이터 끝까지 자동 복사). 1차 완료 후 D17에 1차 샘플수를 확정하면 2차 때 모집단이 늘어도 1차 선정이 바뀌지 않습니다.';
     ws.getCell('F1').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};ws.getCell('F1').alignment={wrapText:true,vertical:'top'};ws.mergeCells('F1:P4');
     const cols=evColsOf(o);const heads=cols.map(x=>clean(x.src)||clean(x.label)).filter(Boolean);
     if(!heads.some(h=>/금액|amount|amt|공급가/i.test(h)))heads.push('금액');
     if(!heads.some(h=>/일자|날짜|date|기간/i.test(h)))heads.push('일자');
     const dateHead=heads.find(h=>/일자|날짜|date|기간/i.test(h))||'',amtHead=heads.find(h=>/금액|amount|amt|공급가/i.test(h))||'';
-    const KEY='$F$'+D0+':$F$'+PMAX,ROUND='$E$'+D0+':$E$'+PMAX,DR='$F$'+D0+':$AA$'+PMAX,HR='$F$'+HDRROW+':$AA$'+HDRROW,RND='$C$'+D0+':$C$'+PMAX,MUST='$D$'+D0+':$D$'+PMAX;
+    const KEY='$F$'+D0+':$F$'+END,ROUND='$E$'+D0+':$E$'+END,DR='$F$'+D0+':$AA$'+END,HR='$F$'+HDRROW+':$AA$'+HDRROW,RND='$C$'+D0+':$C$'+END,MUST='$D$'+D0+':$D$'+END;
     const P=[
       ['통제코드',o.controlCode],['위험수준 (H/M/L)',c.lv],
       ['1차 모집단 건수',{formula:'COUNTIF('+ROUND+',"1차")',result:c.pop||0}],
@@ -2547,26 +2597,34 @@ async function exportProcTOEYear(p){
     P.forEach((pr,i)=>{const r=ws.getRow(3+i);const a=r.getCell(2);a.value=pr[0];styleLabel(a);const b=r.getCell(3);b.value=pr[1];styleVal(b);if(i>=9&&i<=13)b.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}}});
     ws.getCell('C4').dataValidation=dvList(['H','M','L']);
     {const d=ws.getCell('D17');d.value='';styleVal(d);d.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};ws.getCell('E17').value='← 1차 실제 선정 건수를 적으면 고정';ws.getCell('E17').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};ws.getCell('C17').value={formula:'IF(D17<>"","확정","미확정")',result:'미확정'};styleVal(ws.getCell('C17'))}
-    {const a=ws.getCell('D9');a.value={formula:'MAX($A$'+D0+':$A$'+PMAX+')',result:c.n||0};styleVal(a);ws.getCell('E9').value='← 1차 실제 선정';ws.getCell('E9').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
-     const b=ws.getCell('D10');b.value={formula:'MAX($B$'+D0+':$B$'+PMAX+')',result:0};styleVal(b);ws.getCell('E10').value='← 2차 실제 선정 (필수 포함으로 샘플수 초과 가능)';ws.getCell('E10').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
+    {const a=ws.getCell('D9');a.value={formula:'MAX($A$'+D0+':$A$'+END+')',result:c.n||0};styleVal(a);ws.getCell('E9').value='← 1차 실제 선정';ws.getCell('E9').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
+     const b=ws.getCell('D10');b.value={formula:'MAX($B$'+D0+':$B$'+END+')',result:0};styleVal(b);ws.getCell('E10').value='← 2차 실제 선정 (필수 포함으로 샘플수 초과 가능)';ws.getCell('E10').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
+    {const l18=ws.getCell('B18');l18.value='1차 임계 난수(자동)';styleLabel(l18);const t1=ws.getCell('C18');t1.value={formula:'IFERROR(SMALL($AB$'+D0+':$AB$'+END+',MAX(0,$C$9-COUNTIFS('+ROUND+',"1차",'+MUST+',1))),0)',result:0};styleVal(t1);
+     const l19=ws.getCell('B19');l19.value='2차 임계 난수(자동)';styleLabel(l19);const t2=ws.getCell('C19');t2.value={formula:'IFERROR(SMALL($AC$'+D0+':$AC$'+END+',MAX(0,$C$10-COUNTIFS('+ROUND+',"2차",'+MUST+',1))),0)',result:0};styleVal(t2);
+     ws.getCell('D18').value='← 필수 제외 후 남는 샘플수만큼 작은 난수의 경계값. 이 값 이하가 선정';ws.getCell('D18').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
     const H0=['1차 샘플No','2차 샘플No','난수','필수','구분'].concat(heads);
     H0.forEach((h,i)=>{const cc=ws.getCell(HDRROW,1+i);cc.value=h;styleLabel(cc);cc.alignment={horizontal:'center',vertical:'middle',wrapText:true};if(i>=5)cc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE2EFDA'}}});
+    [['AB','후보난수1차'],['AC','후보난수2차']].forEach(([c,h])=>{const cc=ws.getCell(c+HDRROW);cc.value=h;styleLabel(cc);cc.font={name:'맑은 고딕',size:8,color:{argb:'FF9A9A9A'}};ws.getColumn(c).width=7});
     for(let r=D0;r<=PMAX;r++){
       ws.getCell(r,3).value={formula:'IF($F'+r+'="","",MOD(ABS(SIN(($C$11+ROW())*12.9898))*43758.5453,1))'};ws.getCell(r,3).numFmt='0.0000';
       ws.getCell(r,4).value={formula:'IF($F'+r+'="","",IF(OR('+
         'AND($C$13<>"",IFERROR(INDEX($F'+r+':$AA'+r+',MATCH($C$12,'+HR+',0))>=$C$13,FALSE)),'+
-        'AND($C$15<>"",IFERROR(ISNUMBER(SEARCH(","&MONTH(INDEX($F'+r+':$AA'+r+',MATCH($C$14,'+HR+',0)))&",",","&SUBSTITUTE($C$15," ","")&",")),FALSE)),'+
+        'AND($C$15<>"",IFERROR(ISNUMBER(SEARCH(","&MONTH('+DV('INDEX($F'+r+':$AA'+r+',MATCH($C$14,'+HR+',0))')+')&",",","&SUBSTITUTE($C$15," ","")&",")),FALSE)),'+
         'AND(N($C$16)>0,IFERROR(RANK(INDEX($F'+r+':$AA'+r+',MATCH($C$12,'+HR+',0)),INDEX('+DR+',0,MATCH($C$12,'+HR+',0)))<=$C$16,FALSE))'+
         '),1,0))'};
-      ws.getCell(r,5).value={formula:'IF($F'+r+'="","",IF(IFERROR(INDEX($F'+r+':$AA'+r+',MATCH($C$14,'+HR+',0)),0)<='+R1TO+',"1차","2차"))'};
-      const selFx=(rd,ncell,col)=>'IF(OR($F'+r+'="",E'+r+'<>"'+rd+'"),"",IF(OR(D'+r+'=1,COUNTIFS('+ROUND+',"'+rd+'",'+MUST+',0,'+RND+',"<"&C'+r+')+1<='+ncell+'-COUNTIFS('+ROUND+',"'+rd+'",'+MUST+',1)),COUNT($'+col+'$'+HDRROW+':'+col+(r-1)+')+1,""))';
-      ws.getCell(r,1).value={formula:selFx('1차','$C$9','A')};ws.getCell(r,2).value={formula:selFx('2차','$C$10','B')};
+      ws.getCell(r,5).value={formula:'IF($F'+r+'="","",IF('+DV('IFERROR(INDEX($F'+r+':$AA'+r+',MATCH($C$14,'+HR+',0)),0)')+'<='+R1TO+',"1차","2차"))'};
+      // 도우미: 선정 후보(해당 차수·필수 아님)의 난수만 AB/AC열에 두고, 임계 난수(C18/C19) 이하이면 선정 → 행당 계산량이 모집단 크기와 무관
+      ws.getCell(r,28).value={formula:'IF(AND($F'+r+'<>"",E'+r+'="1차",D'+r+'=0),C'+r+',"")'};ws.getCell(r,29).value={formula:'IF(AND($F'+r+'<>"",E'+r+'="2차",D'+r+'=0),C'+r+',"")'};
+      [28,29].forEach(cc=>{const cell=ws.getCell(r,cc);cell.numFmt='0.0000';cell.font={name:'맑은 고딕',size:8,color:{argb:'FFBBBBBB'}}});
+      const selFx=(rd,hcol,tcell,col)=>'IF(OR($F'+r+'="",E'+r+'<>"'+rd+'"),"",IF(OR(D'+r+'=1,AND('+hcol+r+'<>"",'+hcol+r+'<='+tcell+')),COUNT($'+col+'$'+HDRROW+':'+col+(r-1)+')+1,""))';
+      ws.getCell(r,1).value={formula:selFx('1차','AB','$C$18','A')};ws.getCell(r,2).value={formula:selFx('2차','AC','$C$19','B')};
       [1,2,3,4,5].forEach(cc=>{const cell=ws.getCell(r,cc);cell.font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};cell.alignment={horizontal:'center'}});
     }
-    ws.addConditionalFormatting({ref:'A'+D0+':AA'+PMAX,rules:[{type:'expression',formulae:['$A'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFF2CC'}}}},{type:'expression',formulae:['$B'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFDDEBF7'}}}}]});
+    ws.addConditionalFormatting({ref:'A'+D0+':AA'+END,rules:[{type:'expression',formulae:['$A'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFF2CC'}}}},{type:'expression',formulae:['$B'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFDDEBF7'}}}}]});
     ws.getColumn(1).width=9;ws.getColumn(2).width=30;ws.getColumn(3).width=16;ws.getColumn(4).width=9;ws.getColumn(5).width=8;for(let cc=6;cc<=27;cc++)ws.getColumn(cc).width=14;
   };
-  const popFx=(name,i,head,col)=>{const Q="'"+name.replace(/'/g,"''")+"'";return 'IFERROR(INDEX('+Q+'!$F$'+D0+':$AA$'+PMAX+',MATCH('+i+','+Q+'!$'+col+'$'+D0+':$'+col+'$'+PMAX+',0),MATCH("'+String(head).replace(/"/g,'""')+'",'+Q+'!$F$'+HDRROW+':$AA$'+HDRROW+',0)),"")'};
+  const DV=x=>'IF(ISNUMBER('+x+'),'+x+',IFERROR(DATEVALUE(SUBSTITUTE(SUBSTITUTE('+x+',".","-"),"/","-")),IFERROR(DATE(LEFT('+x+',4),MID('+x+',5,2),MID('+x+',7,2)),0)))';   // 텍스트 날짜도 날짜로
+  const popFx=(name,i,head,col)=>{const Q="'"+name.replace(/'/g,"''")+"'";return 'IFERROR(INDEX('+Q+'!$F$'+D0+':$AA$'+END+',MATCH('+i+','+Q+'!$'+col+'$'+D0+':$'+col+'$'+END+',0),MATCH("'+String(head).replace(/"/g,'""')+'",'+Q+'!$F$'+HDRROW+':$AA$'+HDRROW+',0)),"")'};
 
   /* 통제별 운영평가서 (1차·2차 블록 + 연간 결론) */
   p.ctrls.forEach((o,oi)=>{
@@ -2682,12 +2740,12 @@ async function exportProcTOEYear(p){
 
   /* 샘플요청 시트 — 선정된 샘플을 회사에 전달하기 위한 목록(수식, 모집단을 붙이면 자동 채워짐) */
   {
-    dropSheet('샘플요청');
-    const sq=wb.addWorksheet('샘플요청',{views:[{state:'frozen',ySplit:6}]});
-    try{const ws0=wb.getWorksheet('운영평가');sq.orderNo=ws0.orderNo+0.5}catch(e){}
+    dropSheet('샘플요청');dropSheet('샘플요청_전체');
+    const sqc=wb.addWorksheet('샘플요청',{views:[{state:'frozen',ySplit:6}]});     // 압축 목록(빈 행 없이 위에서부터)
+    const sq=wb.addWorksheet('샘플요청_전체',{views:[{state:'frozen',ySplit:6}]});  // 통제별 전체 블록(수식 원본)
     sq.getCell('B2').value='샘플 증빙 요청 목록 — '+p.code+(p.name?' '+p.name:'')+(FILEMETA.company?' · '+FILEMETA.company:'');sq.getCell('B2').font={name:'맑은 고딕',size:13,bold:true};
     sq.getCell('B3').value='차수 표시';styleLabel(sq.getCell('B3'));const fc=sq.getCell('C3');fc.value='전체';styleVal(fc);fc.dataValidation=dvList(['전체','1차','2차']);fc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
-    sq.getCell('D3').value='모집단을 붙이면 선정된 샘플이 자동으로 나타납니다. 회사에 보낼 때: 「차수」열 필터에서 (비어 있음) 해제 → 보이는 행만 복사하거나 시트를 값으로 붙여넣기';sq.getCell('D3').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
+    sq.getCell('D3').value='통제별 전체 블록(수식 원본). 빈 행 없이 보려면 「샘플요청」 시트를 보세요. 차수 선택은 여기 C3.';sq.getCell('D3').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
     const labels=[];p.ctrls.forEach(o=>evColsOf(o).forEach(c=>{if(!labels.includes(c.label))labels.push(c.label)}));const LB=labels.slice(0,8);
     const H=['통제활동 코드','통제활동명','통제수행부서','담당자','차수','샘플No'].concat(LB).concat(['요청 증빙','입수']);
     H.forEach((h,i)=>{const c=sq.getRow(6).getCell(2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
@@ -2719,6 +2777,25 @@ async function exportProcTOEYear(p){
     [16,30,12,10,7,7].concat(LB.map(()=>16)).concat([50,8]).forEach((w,i)=>sq.getColumn(2+i).width=w);sq.getColumn(1).width=3;
     sq.autoFilter={from:{row:6,column:2},to:{row:Math.max(7,r-1),column:1+H.length}};
     sq.addConditionalFormatting({ref:'B7:'+colName(1+H.length)+Math.max(7,r-1),rules:[{type:'expression',formulae:['$F7<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFFBEB'}}}}]});
+    // 순번 열(긴 표 끝): 값이 있는 행만 1,2,3… → 압축 표가 이 순번으로 끌어옴
+    const SEQ=2+H.length,last=Math.max(7,r-1),SL=colName(SEQ-1);
+    {const hc=sq.getCell(6,SEQ);hc.value='순번';styleLabel(hc)}
+    for(let rr=7;rr<=last;rr++){const cc=sq.getCell(rr,SEQ);cc.value={formula:'IF($F'+rr+'="","",COUNT($'+SL+'$6:'+SL+(rr-1)+')+1)'};cc.font={name:'맑은 고딕',size:9,color:{argb:'FFBBBBBB'}}}
+    sq.getColumn(SEQ).width=6;
+    // 압축 표
+    sqc.getCell('B2').value='샘플 증빙 요청 목록 — '+p.code+(p.name?' '+p.name:'')+(FILEMETA.company?' · '+FILEMETA.company:'');sqc.getCell('B2').font={name:'맑은 고딕',size:13,bold:true};
+    sqc.getCell('B3').value='차수 표시';styleLabel(sqc.getCell('B3'));const fc2=sqc.getCell('C3');fc2.value={formula:"'샘플요청_전체'!$C$3",result:'전체'};styleVal(fc2);
+    sqc.getCell('D3').value='선정된 샘플만 위에서부터 나열됩니다(수식). 차수 선택은 「샘플요청_전체」 시트 C3에서 → 이 표가 따라 바뀜. 회사 전달 시 이 시트를 값으로 복사하세요.';sqc.getCell('D3').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
+    H.forEach((h,i)=>{const c=sqc.getCell(6,2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
+    const SQ="'샘플요청_전체'",total=last-6;
+    for(let k=1;k<=total;k++){const rr=6+k;
+      H.forEach((h,i)=>{const col=2+i;const cc=sqc.getCell(rr,col);
+        const ix='INDEX('+SQ+'!$'+colName(col-1)+'$7:$'+colName(col-1)+'$'+last+',MATCH('+k+','+SQ+'!$'+SL+'$7:$'+SL+'$'+last+',0))';
+        cc.value={formula:'IFERROR(IF('+ix+'="","",'+ix+'),"")'};styleVal(cc);
+        if(LB[i-6]!=null&&/일자|날짜|기간|date|월/i.test(h))cc.numFmt='yyyy-mm-dd';
+        if(h==='입수')cc.dataValidation=dvList(['','입수','미입수','부분입수'])})}
+    [16,30,12,10,7,7].concat(LB.map(()=>16)).concat([50,8]).forEach((w,i)=>sqc.getColumn(2+i).width=w);sqc.getColumn(1).width=3;
+    sqc.autoFilter={from:{row:6,column:2},to:{row:6+total,column:1+H.length}};
   }
   {dropSheet('_toe_meta');const ms=wb.addWorksheet('_toe_meta',{state:'hidden'});const META={version:2,mode:'year',round:'year',from,to,r1To,closing:TOE.closing,popRows:TOE.popRows||1000,controls:{}};p.ctrls.forEach(o=>{META.controls[o.controlCode]={sheet:sname(o),pop:popRef[o.controlCode]||null,cls:toeCalc(o).cls,lv:toeCalc(o).lv}});const js=JSON.stringify(META);for(let i=0,r=1;i<js.length;i+=30000,r++)ms.getCell(r,1).value=js.slice(i,i+30000)}
   await finishBook(p,wb,useOrig);
