@@ -126,7 +126,7 @@
     <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
     <button class="ghost" id="loadProjTop">불러오기</button>
     <span class="samp" id="saveStat" style="max-width:none"></span>
-    <div class="stage">v4.1</div>
+    <div class="stage">v4.3</div>
   </div>
 </header>
 
@@ -2575,13 +2575,13 @@ async function exportProcTOEYear(p){
     const t=toeOf(o),name=popRef[o.controlCode];dropSheet(name);const PMAX=popMaxOf(o);PMAXBY[name]=PMAX;
     const ws=wb.addWorksheet(name,{views:[{state:'frozen',ySplit:HDRROW}]});
     ws.getCell('B1').value='모집단 · 샘플 선정 (연간 통합) — '+o.controlCode+' '+(o.controlName||'');ws.getCell('B1').font={name:'맑은 고딕',size:13,bold:true};
-    ws.getCell('F1').value='① '+D0+'행부터 F열 이후에 모집단을 붙여넣기 (연간 전체 또는 1차분 먼저, 2차분은 뒤에 이어서) — '+HDRROW+'행 헤더 이름은 증빙평가 표 「연결 열」과 같아야 함 ② 일자 열 값이 1차 종료일 이하면 1차, 이후면 2차로 자동 구분 ③ A열=1차 샘플No, B열=2차 샘플No가 자동으로 붙고 통제 시트에 반영. ④ 모집단이 수식이 채워진 행('+(PMAX-HDRROW)+'행)보다 많으면: 마지막 수식 행의 A~E열·AB~AC열을 선택해 채우기 핸들을 더블클릭(데이터 끝까지 자동 복사). 1차 완료 후 D17에 1차 샘플수를 확정하면 2차 때 모집단이 늘어도 1차 선정이 바뀌지 않습니다.';
-    ws.getCell('F1').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};ws.getCell('F1').alignment={wrapText:true,vertical:'top'};ws.mergeCells('F1:P4');
+    ws.getCell('H1').value='① '+D0+'행부터 H열 이후에 모집단을 붙여넣기(열 개수 제한 없음) (연간 전체 또는 1차분 먼저, 2차분은 뒤에 이어서) — '+HDRROW+'행 헤더 이름은 증빙평가 표 「연결 열」과 같아야 함 ② 일자 열 값이 1차 종료일 이하면 1차, 이후면 2차로 자동 구분 ③ A열=1차 샘플No, B열=2차 샘플No가 자동으로 붙고 통제 시트에 반영. ④ 모집단이 수식이 채워진 행('+(PMAX-HDRROW)+'행)보다 많으면: 마지막 수식 행의 A~G열을 선택해 채우기 핸들을 더블클릭(데이터 끝까지 자동 복사). A~G는 수식 열이니 모집단은 H열부터. 1차 완료 후 D17에 1차 샘플수를 확정하면 2차 때 모집단이 늘어도 1차 선정이 바뀌지 않습니다.';
+    ws.getCell('H1').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};ws.getCell('H1').alignment={wrapText:true,vertical:'top'};ws.mergeCells('H1:R4');
     const cols=evColsOf(o);const heads=cols.map(x=>clean(x.src)||clean(x.label)).filter(Boolean);
     if(!heads.some(h=>/금액|amount|amt|공급가/i.test(h)))heads.push('금액');
     if(!heads.some(h=>/일자|날짜|date|기간/i.test(h)))heads.push('일자');
     const dateHead=heads.find(h=>/일자|날짜|date|기간/i.test(h))||'',amtHead=heads.find(h=>/금액|amount|amt|공급가/i.test(h))||'';
-    const KEY='$F$'+D0+':$F$'+END,ROUND='$E$'+D0+':$E$'+END,DR='$F$'+D0+':$AA$'+END,HR='$F$'+HDRROW+':$AA$'+HDRROW,RND='$C$'+D0+':$C$'+END,MUST='$D$'+D0+':$D$'+END;
+    const KEY='$H$'+D0+':$H$'+END,ROUND='$E$'+D0+':$E$'+END,DR='$H$'+D0+':$ZZ$'+END,HR='$H$'+HDRROW+':$ZZ$'+HDRROW,RND='$C$'+D0+':$C$'+END,MUST='$D$'+D0+':$D$'+END;
     const P=[
       ['통제코드',o.controlCode],['위험수준 (H/M/L)',c.lv],
       ['1차 모집단 건수',{formula:'COUNTIF('+ROUND+',"1차")',result:c.pop||0}],
@@ -2599,32 +2599,34 @@ async function exportProcTOEYear(p){
     {const d=ws.getCell('D17');d.value='';styleVal(d);d.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};ws.getCell('E17').value='← 1차 실제 선정 건수를 적으면 고정';ws.getCell('E17').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};ws.getCell('C17').value={formula:'IF(D17<>"","확정","미확정")',result:'미확정'};styleVal(ws.getCell('C17'))}
     {const a=ws.getCell('D9');a.value={formula:'MAX($A$'+D0+':$A$'+END+')',result:c.n||0};styleVal(a);ws.getCell('E9').value='← 1차 실제 선정';ws.getCell('E9').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
      const b=ws.getCell('D10');b.value={formula:'MAX($B$'+D0+':$B$'+END+')',result:0};styleVal(b);ws.getCell('E10').value='← 2차 실제 선정 (필수 포함으로 샘플수 초과 가능)';ws.getCell('E10').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
-    {const l18=ws.getCell('B18');l18.value='1차 임계 난수(자동)';styleLabel(l18);const t1=ws.getCell('C18');t1.value={formula:'IFERROR(SMALL($AB$'+D0+':$AB$'+END+',MAX(0,$C$9-COUNTIFS('+ROUND+',"1차",'+MUST+',1))),0)',result:0};styleVal(t1);
-     const l19=ws.getCell('B19');l19.value='2차 임계 난수(자동)';styleLabel(l19);const t2=ws.getCell('C19');t2.value={formula:'IFERROR(SMALL($AC$'+D0+':$AC$'+END+',MAX(0,$C$10-COUNTIFS('+ROUND+',"2차",'+MUST+',1))),0)',result:0};styleVal(t2);
+    {const l18=ws.getCell('B18');l18.value='1차 임계 난수(자동)';styleLabel(l18);const t1=ws.getCell('C18');t1.value={formula:'IFERROR(SMALL($F$'+D0+':$F$'+END+',MAX(0,$C$9-COUNTIFS('+ROUND+',"1차",'+MUST+',1))),0)',result:0};styleVal(t1);
+     const l19=ws.getCell('B19');l19.value='2차 임계 난수(자동)';styleLabel(l19);const t2=ws.getCell('C19');t2.value={formula:'IFERROR(SMALL($G$'+D0+':$G$'+END+',MAX(0,$C$10-COUNTIFS('+ROUND+',"2차",'+MUST+',1))),0)',result:0};styleVal(t2);
      ws.getCell('D18').value='← 필수 제외 후 남는 샘플수만큼 작은 난수의 경계값. 이 값 이하가 선정';ws.getCell('D18').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
-    const H0=['1차 샘플No','2차 샘플No','난수','필수','구분'].concat(heads);
-    H0.forEach((h,i)=>{const cc=ws.getCell(HDRROW,1+i);cc.value=h;styleLabel(cc);cc.alignment={horizontal:'center',vertical:'middle',wrapText:true};if(i>=5)cc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE2EFDA'}}});
-    [['AB','후보난수1차'],['AC','후보난수2차']].forEach(([c,h])=>{const cc=ws.getCell(c+HDRROW);cc.value=h;styleLabel(cc);cc.font={name:'맑은 고딕',size:8,color:{argb:'FF9A9A9A'}};ws.getColumn(c).width=7});
+    {const l=ws.getCell('B20');l.value='수식 미적용 모집단 행';styleLabel(l);const w=ws.getCell('C20');w.value={formula:'MAX(0,COUNTA($H$'+D0+':$H$'+END+')-COUNTIF($E$'+D0+':$E$'+END+',"?차"))',result:0};styleVal(w);
+     const m=ws.getCell('D20');m.value={formula:'IF(C20>0,"⚠ 모집단 "&C20&"행에 수식이 없어 집계·선정에서 빠졌습니다 → 마지막 수식 행의 A~G열을 선택해 채우기 핸들 더블클릭","")',result:''};m.font={name:'맑은 고딕',size:10,bold:true,color:{argb:'FFC00000'}};
+     ws.addConditionalFormatting({ref:'C20',rules:[{type:'expression',formulae:['$C$20>0'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFC7CE'}},font:{color:{argb:'FF9C0006'},bold:true}}}]})}
+    const H0=['1차 샘플No','2차 샘플No','난수','필수','구분','후보난수1차','후보난수2차'].concat(heads);
+    H0.forEach((h,i)=>{const cc=ws.getCell(HDRROW,1+i);cc.value=h;styleLabel(cc);cc.alignment={horizontal:'center',vertical:'middle',wrapText:true};if(i>=7)cc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE2EFDA'}};if(i===5||i===6)cc.font={name:'맑은 고딕',size:8,color:{argb:'FF9A9A9A'}}});
     for(let r=D0;r<=PMAX;r++){
-      ws.getCell(r,3).value={formula:'IF($F'+r+'="","",MOD(ABS(SIN(($C$11+ROW())*12.9898))*43758.5453,1))'};ws.getCell(r,3).numFmt='0.0000';
-      ws.getCell(r,4).value={formula:'IF($F'+r+'="","",IF(OR('+
-        'AND($C$13<>"",IFERROR(INDEX($F'+r+':$AA'+r+',MATCH($C$12,'+HR+',0))>=$C$13,FALSE)),'+
-        'AND($C$15<>"",IFERROR(ISNUMBER(SEARCH(","&MONTH('+DV('INDEX($F'+r+':$AA'+r+',MATCH($C$14,'+HR+',0))')+')&",",","&SUBSTITUTE($C$15," ","")&",")),FALSE)),'+
-        'AND(N($C$16)>0,IFERROR(RANK(INDEX($F'+r+':$AA'+r+',MATCH($C$12,'+HR+',0)),INDEX('+DR+',0,MATCH($C$12,'+HR+',0)))<=$C$16,FALSE))'+
+      ws.getCell(r,3).value={formula:'IF($H'+r+'="","",MOD(ABS(SIN(($C$11+ROW())*12.9898))*43758.5453,1))'};ws.getCell(r,3).numFmt='0.0000';
+      ws.getCell(r,4).value={formula:'IF($H'+r+'="","",IF(OR('+
+        'AND($C$13<>"",IFERROR(INDEX($H'+r+':$ZZ'+r+',MATCH($C$12,'+HR+',0))>=$C$13,FALSE)),'+
+        'AND($C$15<>"",IFERROR(ISNUMBER(SEARCH(","&MONTH('+DV('INDEX($H'+r+':$ZZ'+r+',MATCH($C$14,'+HR+',0))')+')&",",","&SUBSTITUTE($C$15," ","")&",")),FALSE)),'+
+        'AND(N($C$16)>0,IFERROR(RANK(INDEX($H'+r+':$ZZ'+r+',MATCH($C$12,'+HR+',0)),INDEX('+DR+',0,MATCH($C$12,'+HR+',0)))<=$C$16,FALSE))'+
         '),1,0))'};
-      ws.getCell(r,5).value={formula:'IF($F'+r+'="","",IF('+DV('IFERROR(INDEX($F'+r+':$AA'+r+',MATCH($C$14,'+HR+',0)),0)')+'<='+R1TO+',"1차","2차"))'};
-      // 도우미: 선정 후보(해당 차수·필수 아님)의 난수만 AB/AC열에 두고, 임계 난수(C18/C19) 이하이면 선정 → 행당 계산량이 모집단 크기와 무관
-      ws.getCell(r,28).value={formula:'IF(AND($F'+r+'<>"",E'+r+'="1차",D'+r+'=0),C'+r+',"")'};ws.getCell(r,29).value={formula:'IF(AND($F'+r+'<>"",E'+r+'="2차",D'+r+'=0),C'+r+',"")'};
-      [28,29].forEach(cc=>{const cell=ws.getCell(r,cc);cell.numFmt='0.0000';cell.font={name:'맑은 고딕',size:8,color:{argb:'FFBBBBBB'}}});
-      const selFx=(rd,hcol,tcell,col)=>'IF(OR($F'+r+'="",E'+r+'<>"'+rd+'"),"",IF(OR(D'+r+'=1,AND('+hcol+r+'<>"",'+hcol+r+'<='+tcell+')),COUNT($'+col+'$'+HDRROW+':'+col+(r-1)+')+1,""))';
-      ws.getCell(r,1).value={formula:selFx('1차','AB','$C$18','A')};ws.getCell(r,2).value={formula:selFx('2차','AC','$C$19','B')};
+      ws.getCell(r,5).value={formula:'IF($H'+r+'="","",IF('+DV('IFERROR(INDEX($H'+r+':$ZZ'+r+',MATCH($C$14,'+HR+',0)),0)')+'<='+R1TO+',"1차","2차"))'};
+      // 도우미: 선정 후보(해당 차수·필수 아님)의 난수만 F/G열에 두고, 임계 난수(C18/C19) 이하이면 선정 → 행당 계산량이 모집단 크기와 무관
+      ws.getCell(r,6).value={formula:'IF(AND($H'+r+'<>"",E'+r+'="1차",D'+r+'=0),C'+r+',"")'};ws.getCell(r,7).value={formula:'IF(AND($H'+r+'<>"",E'+r+'="2차",D'+r+'=0),C'+r+',"")'};
+      [6,7].forEach(cc=>{const cell=ws.getCell(r,cc);cell.numFmt='0.0000';cell.font={name:'맑은 고딕',size:8,color:{argb:'FFBBBBBB'}}});
+      const selFx=(rd,hcol,tcell,col)=>'IF(OR($H'+r+'="",E'+r+'<>"'+rd+'"),"",IF(OR(D'+r+'=1,AND('+hcol+r+'<>"",'+hcol+r+'<='+tcell+')),COUNT($'+col+'$'+HDRROW+':'+col+(r-1)+')+1,""))';
+      ws.getCell(r,1).value={formula:selFx('1차','F','$C$18','A')};ws.getCell(r,2).value={formula:selFx('2차','G','$C$19','B')};
       [1,2,3,4,5].forEach(cc=>{const cell=ws.getCell(r,cc);cell.font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};cell.alignment={horizontal:'center'}});
     }
-    ws.addConditionalFormatting({ref:'A'+D0+':AA'+END,rules:[{type:'expression',formulae:['$A'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFF2CC'}}}},{type:'expression',formulae:['$B'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFDDEBF7'}}}}]});
-    ws.getColumn(1).width=9;ws.getColumn(2).width=30;ws.getColumn(3).width=16;ws.getColumn(4).width=9;ws.getColumn(5).width=8;for(let cc=6;cc<=27;cc++)ws.getColumn(cc).width=14;
+    ws.addConditionalFormatting({ref:'A'+D0+':ZZ'+END,rules:[{type:'expression',formulae:['$A'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFF2CC'}}}},{type:'expression',formulae:['$B'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFDDEBF7'}}}}]});
+    ws.getColumn(1).width=9;ws.getColumn(2).width=30;ws.getColumn(3).width=16;ws.getColumn(4).width=9;ws.getColumn(5).width=8;ws.getColumn(6).width=7;ws.getColumn(7).width=7;for(let cc=8;cc<=29;cc++)ws.getColumn(cc).width=14;
   };
   const DV=x=>'IF(ISNUMBER('+x+'),'+x+',IFERROR(DATEVALUE(SUBSTITUTE(SUBSTITUTE('+x+',".","-"),"/","-")),IFERROR(DATE(LEFT('+x+',4),MID('+x+',5,2),MID('+x+',7,2)),0)))';   // 텍스트 날짜도 날짜로
-  const popFx=(name,i,head,col)=>{const Q="'"+name.replace(/'/g,"''")+"'";return 'IFERROR(INDEX('+Q+'!$F$'+D0+':$AA$'+END+',MATCH('+i+','+Q+'!$'+col+'$'+D0+':$'+col+'$'+END+',0),MATCH("'+String(head).replace(/"/g,'""')+'",'+Q+'!$F$'+HDRROW+':$AA$'+HDRROW+',0)),"")'};
+  const popFx=(name,i,head,col)=>{const Q="'"+name.replace(/'/g,"''")+"'";return 'IFERROR(INDEX('+Q+'!$H$'+D0+':$ZZ$'+END+',MATCH('+i+','+Q+'!$'+col+'$'+D0+':$'+col+'$'+END+',0),MATCH("'+String(head).replace(/"/g,'""')+'",'+Q+'!$H$'+HDRROW+':$ZZ$'+HDRROW+',0)),"")'};
 
   /* 통제별 운영평가서 (1차·2차 블록 + 연간 결론) */
   p.ctrls.forEach((o,oi)=>{
@@ -2712,7 +2714,7 @@ async function exportProcTOEYear(p){
           else{valc(r,1,1,no,{center:true});ev.forEach((cdef,j)=>valc(r,2+j,2+j,''));valc(r,tcS,tcE,c.auto?'설정/권한 화면 캡쳐로 통제 설계·운영 확인':TXT);valc(r,9,9,'예외사항 없음',{dv:OPT_EV_RESULT})}
           r++}
         const s0=r;const line=(sub,v,opts)=>{lab(r,2,2,sub);valc(r,3,9,v,opts);r++};
-        conclRows[is1?'r1':'r2']=r;line(RL('conclResult'),'Effective',{dv:OPT_TOE_RESULT});ws.getCell(r-1,3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
+        conclRows[is1?'r1':'r2']=r;line(RL('conclResult'),'',{dv:OPT_TOE_RESULT});   // 증빙 확인 후 입력 — 기본값 없음ws.getCell(r-1,3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
         line(RL('opinion'),'확인결과 이상없음');line(RL('exception'),'');line(RL('defClass'),'해당사항 없음',{dv:OPT_DEF});line(RL('comp'),'보완통제 없음',{dv:OPT_COMP});line(RL('recur'),'해당사항 없음',{dv:OPT_RECUR});line(RL('followup'),'');
         lab(s0,1,1,rd+' 결론');ws.mergeCells(s0,1,r-1,1);r++;
         return;
@@ -2720,7 +2722,7 @@ async function exportProcTOEYear(p){
       else if(x.t==='concl'){
         r++;const hc=ws.getCell(r,1);hc.value=RL('conclTitle')+' — 연간 종합(1차 + 2차)';styleLabel(hc);ws.mergeCells(r,1,r,9);for(let kk=1;kk<=9;kk++)ws.getCell(r,kk).border=BORDER;r++;
         const s0=r;const line=(sub,v,opts)=>{lab(r,2,2,sub);valc(r,3,9,v,opts);r++};
-        conclRows.year=r;line(RL('conclResult'),'Effective',{dv:OPT_TOE_RESULT});ws.getCell(r-1,3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
+        conclRows.year=r;line(RL('conclResult'),'',{dv:OPT_TOE_RESULT});ws.getCell(r-1,3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
         line(RL('opinion'),'확인결과 이상없음');line(RL('exception'),'');line(RL('defClass'),'해당사항 없음',{dv:OPT_DEF});line(RL('comp'),'보완통제 없음',{dv:OPT_COMP});line(RL('recur'),'해당사항 없음',{dv:OPT_RECUR});line(RL('followup'),'');
         lab(s0,1,1,RL('conclTitle'));ws.mergeCells(s0,1,r-1,1);
         return;
@@ -2732,7 +2734,7 @@ async function exportProcTOEYear(p){
     const ir=idx.getRow(7+oi),anc='$B'+(7+oi);
     const vals=[o.controlCode,fx(o,'controlName',o.controlName,anc),fx(o,'keyControl',o.keyControl,anc),fx(o,'frequency',o.frequency,anc),amLabel(o),c.lv,
       c.auto?1:PQ?{formula:PQ+'!$C$8',result:c.annual}:pref?{formula:pref.nA,result:c.annual}:c.annual,t.method||(c.auto?'해당없음(자동통제)':'무작위 추출'),null,t.prog||OPT_TPROG[0],
-      ...['r1','r2','year'].map(k=>conclRows[k]?{formula:'IF('+qs(ws.name)+'!$C$'+conclRows[k]+'="","",'+qs(ws.name)+'!$C$'+conclRows[k]+')',result:'Effective'}:''),null];
+      ...['r1','r2','year'].map(k=>conclRows[k]?{formula:'IF('+qs(ws.name)+'!$C$'+conclRows[k]+'="","",'+qs(ws.name)+'!$C$'+conclRows[k]+')',result:null}:''),null];
     vals.forEach((v,kk)=>{const cell=ir.getCell(2+kk);if(kk===8){cell.value=hlink(sname(o),o.controlCode);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else if(kk===13){if(pn){cell.value=hlink(pn,pn);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{cell.value=c.auto?'N/A':'주기성 샘플링';styleVal(cell)}cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
     ir.getCell(11).dataValidation=dvList(OPT_TPROG);   // 결론 3열은 통제 시트에서 입력한 값을 집계(수식)
   });
