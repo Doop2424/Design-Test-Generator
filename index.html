@@ -126,7 +126,7 @@
     <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
     <button class="ghost" id="loadProjTop">불러오기</button>
     <span class="samp" id="saveStat" style="max-width:none"></span>
-    <div class="stage">v4.3</div>
+    <div class="stage">v4.5</div>
   </div>
 </header>
 
@@ -254,6 +254,7 @@
     <label class="f" id="r1toWrap">1차 종료일 <small style="font-weight:400">(2차·연간)</small><input type="date" id="toeR1To"></label>
     <label class="f">결산일<input type="date" id="toeClosing"></label>
     <label class="f">위험수준 기준 열<select id="toeRiskField" style="width:220px"></select></label>
+    <label class="f" style="flex-direction:row;align-items:center;gap:6px;padding-bottom:8px"><input type="checkbox" id="toeKeyOnly" checked> 핵심통제만 운영평가서 작성</label>
   </div>
   <div class="row" style="padding:8px 16px 0">
     <label class="f">평가 수행자<input type="text" id="toePerformer" style="width:120px" placeholder="예: 홍길동"></label>
@@ -283,6 +284,7 @@
     <label class="f" style="flex-direction:row;align-items:center;gap:6px">난수 seed<input type="number" id="toeSeed" style="width:90px"></label>
     <label class="f" style="flex-direction:row;align-items:center;gap:6px">건별 증빙표 최대 행<input type="number" id="toeMaxRows" min="1" max="60" style="width:60px"></label>
     <label class="f" style="flex-direction:row;align-items:center;gap:6px" title="모집단 시트에 미리 수식을 채워 둘 행 수(기본 1,000). 실제 모집단이 더 많으면 엑셀에서 마지막 수식 행을 채우기 핸들 더블클릭으로 늘리면 되므로 크게 잡을 필요 없음">모집단 시트 행<input type="number" id="toePopRows" min="100" max="20000" step="100" style="width:80px"></label>
+    <span class="samp" style="max-width:none">직접 선택:</span><span id="manualClsBox"></span>
     <button class="ghost" id="holidayBtn">휴일 목록</button>
     <button id="prevFileBtn" style="display:none" title="이 툴로 만든 1차 운영평가 파일(xlsx)을 읽어 1차 결과·모집단·선정을 2차 파일에 병합">1차 파일 불러오기 (2차 병합)</button><input type="file" id="prevFile" accept=".xlsx" style="display:none">
     <button class="ghost" id="clearPrev" style="display:none" title="저장된 1차 선정 정보 삭제">1차 정보 지우기</button>
@@ -421,16 +423,16 @@ const FIELDS = [
  {g:'참고', key:'autoType', label:'자동통제 유형', opt:true, hint:'값이 있으면 자동통제 (수동 열이 비어 있을 때)',
   pos:[[/^자동통제(유형)?$|^자동$|auto(mated)?(control)?(type)?$/,14],[/통제유형|controltype/,4]], neg:[[/수동|manual|구분|자동화(여부|수준)/,12]]},
  /* ── 운영평가(TOE) 양식용 항목 — RCM에 없으면 사용 해제하면 해당 행이 빠집니다 ── */
- {g:'운영평가', key:'cycleCode', label:'Cycle 코드', opt:true, pos:[[/^cycle#?$|cycle(번호|코드|no)|사이클(코드|번호|#)/,13]], neg:[[/process|프로세스|sub/,12]], val:v=>/^[A-Z]{1,4}\d{0,2}$/.test(v)?4:0},
- {g:'운영평가', key:'cycleName', label:'Cycle 명', opt:true, pos:[[/^cycle$|^사이클(명)?$/,12]], neg:[[/#|번호|코드|no$|process|sub/,12]], val:v=>v.length<=20?2:0},
- {g:'운영평가', key:'subProcessCode', label:'Sub Process 코드', opt:true, pos:[[/^major(process)?(code|no|번호|코드)$|^(중|소)분류(코드|번호)$/,14],[/subprocess#|subprocess(코드|번호|no)|하위프로세스(코드|번호)/,13]], neg:[[/위험|risk|명$/,10]]},
- {g:'운영평가', key:'subProcessName', label:'Sub Process 명', opt:true, pos:[[/^majorprocess$|^major$|^(중|소)분류(명)?$/,13],[/^subprocess$|subprocess(text|name|명)|하위프로세스(명|text)?$/,12]], neg:[[/#|코드|번호|no$|위험|risk/,12]], val:v=>v.length<=30?2:0},
- {g:'운영평가', key:'irLevel', label:'Sub Process 위험수준(IR)', opt:true, pos:[[/subprocess위험수준|고유위험|ir:|inherent/,13]], neg:[[/기술|설명|사유|평가요소/,10]], val:v=>/^(high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
+ {g:'운영평가', key:'cycleCode', label:'상위 프로세스 코드 (Cycle)', opt:true, pos:[[/^cycle#?$|cycle(번호|코드|no)|사이클(코드|번호|#)/,13]], neg:[[/process|프로세스|sub/,12]], val:v=>/^[A-Z]{1,4}\d{0,2}$/.test(v)?4:0},
+ {g:'운영평가', key:'cycleName', label:'상위 프로세스명 (Cycle)', opt:true, pos:[[/^cycle$|^사이클(명)?$/,12]], neg:[[/#|번호|코드|no$|process|sub/,12]], val:v=>v.length<=20?2:0},
+ {g:'운영평가', key:'subProcessCode', label:'하위 프로세스 코드', opt:true, pos:[[/^major(process)?(code|no|번호|코드)$|^(중|소)분류(코드|번호)$/,14],[/subprocess#|subprocess(코드|번호|no)|하위프로세스(코드|번호)/,13]], neg:[[/위험|risk|명$/,10]]},
+ {g:'운영평가', key:'subProcessName', label:'하위 프로세스명', opt:true, pos:[[/하위프로세스(명|이름|명칭)/,13],[/^majorprocess$|^major$|^(중|소)분류(명)?$/,13],[/^subprocess$|subprocess(text|name|명)|하위프로세스(명|text)?$/,12]], neg:[[/#|코드|번호|no$|위험|risk/,12]], val:v=>v.length<=30?2:0},
+ {g:'운영평가', key:'irLevel', label:'고유위험 수준 (IR)', opt:true, pos:[[/고유리스크|고유위험|통제이전|inherent/,10],[/리스크레벨|위험수준|위험등급|risklevel|^level/,8],[/subprocess위험수준|고유위험|ir:|inherent/,13]], neg:[[/통제위험|controlrisk|통제후|잔여/,14],[/기술|설명|사유|평가요소/,10]], val:v=>/^(high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
  {g:'운영평가', key:'rtFR', label:'위험유형 — 재무보고 신뢰성', opt:true, pos:[[/재무보고신뢰성/,13],[/통제목적|controlobjective/,4]]},
  {g:'운영평가', key:'rtAsset', label:'위험유형 — 자산보호', opt:true, pos:[[/자산보호/,13],[/통제목적|controlobjective/,4]]},
  {g:'운영평가', key:'rtFraud', label:'위험유형 — 부정방지', opt:true, pos:[[/부정방지/,13],[/통제목적|controlobjective/,4]]},
- {g:'운영평가', key:'riskCode', label:'Risk 코드', opt:true, pos:[[/prpkey|^prp(코드|번호|id|no)$|riskkey/,15],[/통제위험번호|risk(코드|번호|#|id|no)|위험(코드|번호|id)/,13]], neg:[[/설명|기술|내용|명칭|수준/,12]], val:v=>/R\d{1,3}/.test(v)?4:0},
- {g:'운영평가', key:'crLevel', label:'통제위험 수준', opt:true, pos:[[/^통제위험(위험)?(수준|등급)$|controlrisk(level|grade)/,13],[/^통제위험수준$|controlrisklevel/,13]], neg:[[/기술|설명|전반|romm|최종/,12]], val:v=>/^(higher|moderate|lower|high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
+ {g:'운영평가', key:'riskCode', label:'Risk 코드', opt:true, pos:[[/^(리스크|위험|risk)(\(wcgw\))?(no\.?|번호|코드|#)$|wcgw\)?(no|번호)/,14],[/prpkey|^prp(코드|번호|id|no)$|riskkey/,15],[/통제위험번호|risk(코드|번호|#|id|no)|위험(코드|번호|id)/,13]], neg:[[/설명|기술|내용|명칭|수준/,12]], val:v=>/R\d{1,3}/.test(v)?4:0},
+ {g:'운영평가', key:'crLevel', label:'통제위험 수준', opt:true, pos:[[/^통제위험(평가)?$|controlrisk(assessment)?$/,13],[/리스크레벨|위험수준|위험등급|risklevel|^level/,8],[/^통제위험(위험)?(수준|등급)$|controlrisk(level|grade)/,13],[/^통제위험수준$|controlrisklevel/,13]], neg:[[/고유|inherent|통제이전/,14],[/기술|설명|전반|romm|최종/,12]], val:v=>/^(higher|moderate|lower|high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
  {g:'운영평가', key:'crDesc', label:'통제위험 수준 기술', opt:true, pos:[[/통제위험수준(기술|설명|서술)/,13]], neg:[[/전반/,10]], val:v=>v.length>20?3:0},
  {g:'운영평가', key:'account', label:'관련 계정과목', opt:true, pos:[[/^계정과목(명)?$|관련계정(과목)?(명)?/,13],[/관련계정(과목)?|^계정과목$|account/,12]], neg:[[/코드|code/,6]]},
  {g:'운영평가', key:'asE', label:'경영자주장 — 실재성(E)', opt:true, pos:[[/실재성|existence/,12],[/주장|assertion/,5]]},
@@ -440,11 +442,11 @@ const FIELDS = [
  {g:'운영평가', key:'asP', label:'경영자주장 — 표시와 공시(P)', opt:true, pos:[[/표시와?공시|presentation|disclosure/,12],[/주장|assertion/,5]]},
  {g:'운영평가', key:'asO', label:'경영자주장 — 발생사실(O)', opt:true, pos:[[/발생사실|occurrence/,12],[/주장|assertion/,5]]},
  {g:'운영평가', key:'asM', label:'경영자주장 — 측정(M)', opt:true, pos:[[/^측정$|measurement|accuracy|정확성|측정과배분/,12],[/주장|assertion/,5]]},
- {g:'운영평가', key:'system', label:'System', opt:true, pos:[[/^system$|^시스템$|사용시스템|관련시스템/,12]], neg:[[/자동|권한|접근|설정/,8]], val:v=>v.length<=30?2:0},
- {g:'운영평가', key:'ipe', label:'IPE (Y/N)', opt:true, pos:[[/^ipe$|ipe(여부|해당|y\/n)|informationproduced/,13]], neg:[[/type|유형|내용|기술/,12]], val:v=>/^(y|n|yes|no|해당|비해당)$/i.test(v)?4:0},
- {g:'운영평가', key:'ipeType', label:'IPE Type / 명', opt:true, pos:[[/ipetype|ipe(유형|종류|명|name)/,13]]},
+ {g:'운영평가', key:'system', label:'System', opt:true, pos:[[/it시스템|연관(it)?시스템|시스템명|관련it|응용프로그램|application/,12],[/^system$|^시스템$|사용시스템|관련시스템/,12]], neg:[[/자동|권한|접근|설정/,8]], val:v=>v.length<=30?2:0},
+ {g:'운영평가', key:'ipe', label:'IPE (Y/N)', opt:true, pos:[[/^ipe(y\/n|여부)$/,14],[/^ipe$|ipe(여부|해당|y\/n)|informationproduced/,13]], neg:[[/문서|자료|보고서|리스트/,14],[/type|유형|내용|기술/,12]], val:v=>/^(y|n|yes|no|해당|비해당)$/i.test(v)?4:0},
+ {g:'운영평가', key:'ipeType', label:'IPE Type / 명', opt:true, pos:[[/ipe(해당)?(문서|자료|보고서|리스트)|^ipe$/,12],[/ipetype|ipe(유형|종류|명|name)/,13]]},
  {g:'운영평가', key:'mrc', label:'MRC (Y/N)', opt:true, pos:[[/^mrc$|mrc(여부|해당|y\/n)|managementreview/,13]], neg:[[/내용|기술|설명|type/,12]], val:v=>/^(y|n|yes|no)$/i.test(v)?4:0},
- {g:'운영평가', key:'mrcDesc', label:'MRC 내용 기술 / 명', opt:true, pos:[[/mrc(내용|기술|설명|명|name)/,13]]},
+ {g:'운영평가', key:'mrcDesc', label:'MRC 내용 기술 / 명', opt:true, pos:[[/mrc(no|번호|문서|리스트)/,13],[/mrc(내용|기술|설명|명|name)/,13]]},
  {g:'운영평가', key:'overallLevel', label:'전반적인 위험 수준', opt:true, pos:[[/^전반적인?위험수준$|overallrisk(level)?$/,13]], neg:[[/기술|설명|서술/,12]], val:v=>/^(higher|moderate|lower|high|medium|low|h|m|l)$/i.test(v)?4:0},
  {g:'운영평가', key:'overallDesc', label:'전반적인 위험 수준 기술', opt:true, pos:[[/전반적인?위험수준.*(기술|설명|서술)/,13]]},
  {g:'운영평가', key:'keyReason', label:'핵심통제 미선정 사유', opt:true, pos:[[/미선정사유|(핵심|key).*(사유|근거|rationale)/,13]]},
@@ -455,7 +457,7 @@ const FIELDS = [
  {g:'운영평가', key:'popCount', label:'모집단의 수', opt:true, pos:[[/모집단(의)?(수|개수|건수|count)$|population(size|count)/,13]], neg:[[/샘플|sample|정의|완전성/,12]]},
  {g:'운영평가', key:'sampleSize', label:'테스트 범위 (Sample Size)', opt:true, pos:[[/samplesize|테스트범위|샘플(수|사이즈|규모)|표본(수|규모)/,13]], neg:[[/guide|가이드/,6]]},
  {g:'운영평가', key:'rulePolicy', label:'Rule & policy', opt:true, pos:[[/rule|규정|정책|policy/,11]], neg:[[/위험|risk|통제활동/,8]]},
- {g:'운영평가', key:'reviewer', label:'통제활동책임자 (Reviewer)', opt:true, pos:[[/reviewer/,14],[/통제활동책임자|검토자/,9]], neg:[[/preparer|수행담당자/,12]]},
+ {g:'운영평가', key:'reviewer', label:'통제활동책임자 (Reviewer)', opt:true, pos:[[/(통제)?(수행)?책임자|승인자|approver/,11],[/reviewer/,14],[/통제활동책임자|검토자/,9]], neg:[[/담당자|preparer/,12],[/preparer|수행담당자/,12]]},
 ];
 const RCM_KEYS=FIELDS.map(f=>f.key);
 
@@ -615,6 +617,7 @@ let OUT_MODE='tod';
 let FILEMETA={company:'',period:'',ver:'',pattern:DEF_PATTERN};
 const used=k=>USE[k]!==false;
 const PLACES=[['ctrl','통제 시트 기본정보 행'],['idx','설계평가 인덱스 열'],['none','RCM 시트에만']];
+const ALIAS={cycleCode:'processCode',cycleName:'processName',overallLevel:'controlRisk'};   // 운영평가 항목에 별도 열이 없으면 설계평가 항목 열을 함께 사용
 const extrasAt=place=>EXTRA.filter(x=>x.place===place&&MAP[x.key]!=null&&used(x.key));
 const xLabel=x=>{const f=FIELDS.find(v=>v.key===x.key);return f?labelOf(f):(x.label||'추가 항목')};
 function syncExtraFields(){
@@ -728,6 +731,10 @@ function autoDetectRows(){
   const sc=[];let bs=-1;
   for(let r=0;r<Math.min(GRID.length,25);r++){const s=headerScore(r);sc.push(s);if(s>bs)bs=s}
   HDR=sc.findIndex(s=>s>=bs*0.93); if(HDR<0)HDR=0;
+  {const useBak=Object.assign({},USE);let best=null;                // 점수 상위 행들을 실제로 매핑해 보고 필수 항목이 가장 많이 잡히는 행을 헤더로
+   sc.forEach((v,r)=>{if(v<bs*0.5)return;HDR=r;DSTART=r+1;DEND=Math.min(GRID.length-1,r+30);USE=Object.assign({},useBak);buildMapping(true,true);
+     const n=FIELDS.filter(f=>f.g==='필수'&&MAP[f.key]!=null).length*3+FIELDS.filter(f=>MAP[f.key]!=null).length;if(!best||n>best.n)best={r,n}});
+   USE=useBak;if(best)HDR=best.r}
   DSTART=HDR+1; DEND=Math.min(GRID.length-1,HDR+30);
   buildMapping(true,true);
   const cols=FIELDS.map(f=>MAP[f.key]).filter(v=>v!=null);
@@ -798,6 +805,7 @@ function buildMapping(reset,quiet){
     pairs.forEach(p=>{if(done.has(p.f)||usedC.has(p.c))return;MAP[p.f]=p.c;usedC.add(p.c);done.add(p.f);MAP['_s_'+p.f]=p.s});
     EXTRA.forEach(x=>{if(keepX[x.key]!=null&&keepX[x.key]<NCOL){MAP[x.key]=keepX[x.key];MAP['_s_'+x.key]=99}});
     FIELDS.forEach(f=>{if(MAP[f.key]==null)MAP[f.key]=null});
+    Object.entries(ALIAS).forEach(([k,a])=>{if(MAP[k]==null&&MAP[a]!=null){MAP[k]=MAP[a];MAP['_s_'+k]=MAP['_s_'+a]||9;if(USE[k]===false)delete USE[k]}});
     FIELDS.forEach(f=>{if(f.g==='운영평가'&&USE[f.key]===undefined&&MAP[f.key]==null)USE[f.key]=false});
   }
   if(quiet)return;
@@ -811,7 +819,7 @@ function renderMap(){
       t.innerHTML='<td colspan="7" class="grp">'+(g==='필수'?'설계평가 필수 항목 — 시트 레이아웃에 자리가 있는 항목':g==='참고'?'참고 항목':g==='운영평가'?'운영평가(TOE) 양식 항목 — 운영평가서에만 사용 · RCM에 없으면 자동으로 사용 해제됨':'사용자 추가 항목 — RCM의 다른 열을 함께 가져옵니다')+'</td>';tb.appendChild(t)}
     const c=MAP[f.key],sc=MAP['_s_'+f.key]||0,on=used(f.key);
     let badge;
-    const dupOf=c==null?[]:FIELDS.filter(v=>v.key!==f.key&&MAP[v.key]===c).map(v=>labelOf(v));
+    const dupOf=c==null?[]:FIELDS.filter(v=>v.key!==f.key&&MAP[v.key]===c&&ALIAS[f.key]!==v.key&&ALIAS[v.key]!==f.key).map(v=>labelOf(v));
     if(c==null&&f.derive)badge='<span class="badge b-derive">절차에서 추출</span>';
     else if(c==null)badge='<span class="badge '+(f.opt?'b-warn':'b-bad')+'">'+(f.opt?'없음':'미인식')+'</span>';
     else if(sc>=14)badge='<span class="badge b-ok">확실</span>';
@@ -1194,7 +1202,7 @@ const PERIOD_META=[['daily','일별',/일별|매일|daily|working|calendar|일�
 const LV_IDX={H:0,M:1,L:2},LV_LABEL={H:'H (Higher)',M:'M (Moderate)',L:'L (Lower)'};
 const lvOf=v=>{v=String(v||'').trim();if(!v)return null;if(/higher|high|significant|^h$|^상$/i.test(v))return 'H';if(/moderate|medium|^m$|^중$/i.test(v))return 'M';if(/lower|low|^l$|^하$/i.test(v))return 'L';return null};
 const DEF_EVCOLS=[{label:'식별번호(문서번호)',src:''},{label:'통제 발생일자',src:''}];
-let TOE={round:'1',label:'',from:'',to:'',ratio:70,closing:'',riskField:'overallLevel',guide:JSON.parse(JSON.stringify(DEF_GUIDE)),evCols:DEF_EVCOLS.map(x=>Object.assign({},x)),maxRows:60,seed:Math.floor(Math.random()*90000)+10000,periodic:{}};
+let TOE={keyOnly:true,manualCls:['monthly','quarterly','semi','annual'],round:'1',label:'',from:'',to:'',ratio:70,closing:'',riskField:'overallLevel',guide:JSON.parse(JSON.stringify(DEF_GUIDE)),evCols:DEF_EVCOLS.map(x=>Object.assign({},x)),maxRows:60,seed:Math.floor(Math.random()*90000)+10000,periodic:{}};
 const DEF_HOLIDAYS=`# 대한민국 공휴일(대체공휴일 포함) — 확인 후 수정 가능. 한 줄에 yyyy-mm-dd, # 뒤는 메모
 2025-01-01 신정
 2025-01-28 설 연휴
@@ -1257,6 +1265,13 @@ function holidaySet(){
   return st;
 }
 const isWorkday=(d,hs)=>{const w=d.getDay();return w!==0&&w!==6&&!hs.has(fmtD(d))};
+function isKeyCtrl(o){                          // 핵심통제 여부 — 열이 없거나 사용 해제면 전부 핵심으로 봄
+  if(MAP.keyControl==null||!used('keyControl'))return true;
+  const v=norm(o.keyControl);if(!v)return false;
+  if(/^(n|no|non|비핵심|x|-|n\/a|na|아니오|아니요|false|0)$/.test(v)||/non-?key|비핵심/.test(v))return false;
+  return /^(y|yes|o|v|●|○|◎|✓|✔|true|1|key|핵심|해당|예)/.test(v)||/key|핵심/.test(v);
+}
+const toeIn=o=>!TOE.keyOnly||isKeyCtrl(o);    // 운영평가서 작성 대상
 const evColsOf=o=>(o.toe&&o.toe.evCols&&o.toe.evCols.length)?o.toe.evCols:TOE.evCols;
 const stripCode=t=>String(t||'').replace(/\n/g,' ').replace(/\b(no\.?|번호|코드|code|id|#|text|명|name)\b/gi,'').replace(/[()\[\]]/g,' ').replace(/\s+/g,' ').trim();
 const ROW_LABELS=[   // [키, 기본 이름, 설명]
@@ -1377,7 +1392,7 @@ function periodList(cls){
 function lcg(seed,i){let t=(Math.imul(seed|0,374761393)+Math.imul(i+1,668265263))>>>0;t=Math.imul(t^(t>>>15),0x85ebca6b)>>>0;t=Math.imul(t^(t>>>13),0xc2b2ae35)>>>0;t^=t>>>16;return (t>>>0)/4294967296}   // 결정적 난수(해시)
 function pickIdx(count,n,seed){if(n>=count)return [...Array(count).keys()];const arr=[...Array(count).keys()].map(i=>[lcg(seed,i),i]).sort((x,y)=>x[0]-y[0]);return arr.slice(0,n).map(x=>x[1]).sort((x,y)=>x-y)}
 function perGroups(){                        // 현재 통제들이 쓰는 주기·위험수준 그룹
-  const g={};PROCS.forEach(p=>p.ctrls.forEach(o=>{const c=toeCalc(o);if(!c.periodic)return;const k=c.cls+'|'+c.lv;if(!g[k])g[k]={cls:c.cls,lv:c.lv,n:c.n||0,ctrls:[]};g[k].n=Math.max(g[k].n,c.n||0);g[k].ctrls.push(o.controlCode)}));
+  const g={};PROCS.forEach(p=>p.ctrls.forEach(o=>{if(!toeIn(o))return;const c=toeCalc(o);if(!c.periodic)return;const k=c.cls+'|'+c.lv;if(!g[k])g[k]={cls:c.cls,lv:c.lv,n:c.n||0,ctrls:[]};g[k].n=Math.max(g[k].n,c.n||0);g[k].ctrls.push(o.controlCode)}));
   return g;
 }
 function levelN(cls,lv){                       // 기준표 기반 차수 샘플수 (통제 무관)
@@ -1516,7 +1531,7 @@ function syncTOEInputs(){
   toeRound.value=TOE.round;toeLabel.value=TOE.label||'';toeFrom.value=TOE.from||'';toeTo.value=TOE.to||'';toeRatio.value=TOE.ratio;toeClosing.value=TOE.closing||'';
   toePerformer.value=TOE.performer||'';toePerformDate.value=TOE.performDate||'';toeReviewer.value=TOE.reviewer||'';toeReviewDate.value=TOE.reviewDate||'';
   if(!TOE.r1To){const t=new Date();const y=TOE.closing?new Date(TOE.closing).getFullYear():t.getFullYear();TOE.r1To=fmtD(t<new Date(y,11,31)?t:new Date(y,11,31))}
-  toeR1To.value=TOE.r1To;document.getElementById('r1toWrap').style.display=TOE.round==='1'?'none':'';
+  toeR1To.value=TOE.r1To;document.getElementById('toeKeyOnly').checked=TOE.keyOnly!==false;document.getElementById('r1toWrap').style.display=TOE.round==='1'?'none':'';
   const sel=document.getElementById('toeRiskField');
   const cands=[['overallLevel','전반적인 위험 수준'],['crLevel','통제위험 수준'],['irLevel','Sub Process 위험수준(IR)'],['controlRisk','최종 통제위험(RoMM)']].concat(EXTRA.map(x=>[x.key,xLabel(x)+' (추가 항목)']));
   sel.innerHTML=cands.map(([k,l])=>'<option value="'+k+'"'+(MAP[k]==null?' disabled':'')+'>'+esc(l)+(MAP[k]==null?' — 미매핑':'')+'</option>').join('')+'<option value="">(없음 — 통제별 지정, 기본 M)</option>';
@@ -1524,6 +1539,10 @@ function syncTOEInputs(){
   sel.value=TOE.riskField;
 }
 ['toePerformer','toePerformDate','toeReviewer','toeReviewDate'].forEach(id=>{document.getElementById(id).onchange=()=>{TOE.performer=toePerformer.value;TOE.performDate=toePerformDate.value;TOE.reviewer=toeReviewer.value;TOE.reviewDate=toeReviewDate.value}});
+function renderManualCls(){const b=document.getElementById('manualClsBox');if(!b)return;const mc=TOE.manualCls||[];
+  b.innerHTML=PERIOD_META.map(([k,lb])=>'<label style="margin-right:6px;font-size:12px"><input type="checkbox" data-mc="'+k+'"'+(mc.includes(k)?' checked':'')+'> '+lb+'</label>').join('');
+  b.querySelectorAll('input[data-mc]').forEach(el=>el.onchange=e=>{const k=e.target.dataset.mc;TOE.manualCls=(TOE.manualCls||[]).filter(x=>x!==k);if(e.target.checked)TOE.manualCls.push(k);renderTOE()})}
+document.getElementById('toeKeyOnly').onchange=e=>{TOE.keyOnly=e.target.checked;renderTOE();renderExport()};
 document.getElementById('toeR1To').onchange=e=>{TOE.r1To=e.target.value;renderTOE();renderExport()};
 ['toeRound','toeLabel','toeFrom','toeTo','toeRatio','toeClosing','toeRiskField'].forEach(id=>{document.getElementById(id).onchange=()=>{
   const prevDef=defaultPeriod();const wasDef=TOE.from===prevDef.from&&TOE.to===prevDef.to;
@@ -1539,8 +1558,8 @@ function renderTOE(){
   const tb=document.getElementById('toerows');tb.innerHTML='';
   p.ctrls.forEach((o,i)=>{
     const c=toeCalc(o),t=toeOf(o);
-    const tr=document.createElement('tr');
-    tr.innerHTML='<td>'+(i+1)+'</td><td><span class="col-chip">'+esc(o.controlCode)+'</span></td><td>'+esc(o.controlName)+'</td>'+
+    const tr=document.createElement('tr');if(!toeIn(o))tr.style.opacity='.45';
+    tr.innerHTML='<td>'+(i+1)+'</td><td><span class="col-chip">'+esc(o.controlCode)+'</span>'+(toeIn(o)?'':'<br><span class="tag">비핵심 — 제외</span>')+'</td><td>'+esc(o.controlName)+'</td>'+
       '<td>'+esc(shortFreq(o.frequency||'')||'—')+'<br><span class="tag'+(c.auto?' auto':'')+'">'+freqClassLabel(c.cls)+'</span></td>'+
       '<td><span class="tag'+(isAuto(o)?' auto':'')+'">'+esc(amLabel(o))+'</span></td>'+
       '<td><select data-lv="'+i+'">'+['','H','M','L'].map(v=>'<option value="'+v+'"'+((t.lv||'')===v?' selected':'')+'>'+(v?LV_LABEL[v]:'자동('+c.lv+')')+'</option>').join('')+'</select></td>'+
@@ -1565,7 +1584,7 @@ function renderTOE(){
   tb.querySelectorAll('input[data-n]').forEach(el=>el.onchange=e=>{toeOf(p.ctrls[+e.target.dataset.n]).n=e.target.value===''?null:+e.target.value;renderTOE()});
   tb.querySelectorAll('select[data-m]').forEach(el=>el.onchange=e=>{toeOf(p.ctrls[+e.target.dataset.m]).method=e.target.value});
   tb.querySelectorAll('input[data-pr]').forEach(el=>el.onchange=e=>{const t=toeOf(p.ctrls[+e.target.dataset.pr]);t.popRows=e.target.value===''?null:Math.min(50000,Math.max(100,+e.target.value))});
-  renderPeriodic();
+  renderPeriodic();renderManualCls();
 }
 
 /* ══════════ 요청증빙 목록 UI ══════════ */
@@ -1695,7 +1714,7 @@ document.getElementById('loadProj').onchange=e=>{
     if(m.fileMeta)FILEMETA=Object.assign({pattern:DEF_PATTERN},m.fileMeta);syncFileMeta();
     if(m.rcmMode)RCM_MODE=m.rcmMode;
     if(m.fxText!=null){FX_TEXT=!!m.fxText;document.getElementById('fxtext').checked=FX_TEXT}
-    if(m.toe){TOE=Object.assign({},TOE,m.toe);if(TOE.round==='all')TOE.round='year';if(!TOE.guide)TOE.guide=JSON.parse(JSON.stringify(DEF_GUIDE));if(!TOE.evCols||!TOE.evCols.length)TOE.evCols=DEF_EVCOLS.map(x=>Object.assign({},x));if(!TOE.maxRows)TOE.maxRows=60;if(!TOE.seed)TOE.seed=12345;if(!TOE.periodic)TOE.periodic={}}
+    if(m.toe){TOE=Object.assign({},TOE,m.toe);if(!TOE.manualCls)TOE.manualCls=['monthly','quarterly','semi','annual'];if(TOE.round==='all')TOE.round='year';if(!TOE.guide)TOE.guide=JSON.parse(JSON.stringify(DEF_GUIDE));if(!TOE.evCols||!TOE.evCols.length)TOE.evCols=DEF_EVCOLS.map(x=>Object.assign({},x));if(!TOE.maxRows)TOE.maxRows=60;if(!TOE.seed)TOE.seed=12345;if(!TOE.periodic)TOE.periodic={}}
     if(m.outMode)OUT_MODE=m.outMode;
     if(m.prev1){PREV1=m.prev1;const pi=document.getElementById('prevInfo');pi.classList.remove('hidden');pi.innerHTML='<b>1차 파일</b> '+esc(PREV1.file||'')+' (작업 파일에서 복원) — 통제 '+Object.keys(PREV1.ctrls).length+'건 <button class="ghost tiny" id="prevClear">1차 파일 해제</button>';document.getElementById('prevClear').onclick=()=>{PREV1=null;pi.classList.add('hidden')}}
     if(m.fxMode){FX_MODE=m.fxMode==='direct'?'lookup':m.fxMode;document.getElementById('fxmode').value=FX_MODE;setFxHelp()}
@@ -1768,7 +1787,7 @@ function setRcmHelp(){
 document.getElementById('rcmmode').onchange=e=>{RCM_MODE=e.target.value;setRcmHelp()};
 document.getElementById('outmode').onchange=e=>{OUT_MODE=e.target.value;renderExport();renderReq()};
 function setOutHelp(){document.getElementById('outmodehelp').innerHTML=OUT_MODE==='toe'
-  ?('운영평가 파일: RCM + 운영평가 인덱스 + 요청증빙 + 샘플 Guide(파라미터·휴일) + 주기성 샘플링(수식) + 통제별 운영평가서(1차·2차 블록 + 연간 결론) + 건별 모집단 시트(수식) — <b>'+esc(TOE.label||roundName())+'</b> · 1차 종료일 '+esc(TOE.round==='1'?(TOE.to||''):(TOE.r1To||''))+' · 툴 없이 엑셀만으로 2차·다음 연도 진행 가능')+(TOE.from&&TOE.to?' · '+TOE.from+' ~ '+TOE.to:' · <b style="color:#9B2C2C">대상기간 미입력</b>')+' · 설정은 8번 카드'
+  ?((TOE.keyOnly!==false?'<b>핵심통제만</b> · ':'')+'운영평가 파일: RCM + 운영평가 인덱스 + 요청증빙 + 샘플 Guide(파라미터·휴일) + 주기성 샘플링(수식) + 통제별 운영평가서(1차·2차 블록 + 연간 결론) + 건별 모집단 시트(수식) — <b>'+esc(TOE.label||roundName())+'</b> · 1차 종료일 '+esc(TOE.round==='1'?(TOE.to||''):(TOE.r1To||''))+' · 툴 없이 엑셀만으로 2차·다음 연도 진행 가능')+(TOE.from&&TOE.to?' · '+TOE.from+' ~ '+TOE.to:' · <b style="color:#9B2C2C">대상기간 미입력</b>')+' · 설정은 8번 카드'
   :'설계평가 파일: RCM + 설계평가 인덱스 + 요청증빙 + 통제별 설계평가 시트(증빙 포함)'}
 const FX_HELP={
   header:'「RCM참조」 시트가 헤더 행·열 위치를 수식으로 찾고, 모든 시트는 그 열 번호로 RCM을 조회합니다. RCM 시트에 수정된 RCM을 통째로 붙여 넣어도 헤더 이름·통제번호만 같으면 값이 따라옵니다(행·열 이동, 삽입·삭제 무관). 헤더 이름이 바뀌면 RCM참조 시트에서 이름만 고치면 됩니다.',
@@ -2455,8 +2474,10 @@ async function exportProcTOE(p){
 function fmtPeriod(){return TOE.from&&TOE.to?TOE.from+' ~ '+TOE.to:''}
 
 /* ══════════ 운영평가 — 연간 통합(엑셀 자립형) ══════════ */
-async function exportProcTOEYear(p){
-  const B=await openBook(p);if(!B)return;
+async function exportProcTOEYear(p0){
+  const p=Object.assign({},p0,{ctrls:p0.ctrls.filter(toeIn)});     // 핵심통제만(설정 시)
+  if(!p.ctrls.length){alert('['+p0.code+'] 운영평가 대상(핵심통제)이 없습니다.');return}
+  const B=await openBook(p0);if(!B)return;
   const {wb,useOrig,fx,refOf,dropSheet}=B;
   const on=k=>used(k);
   const G="'샘플 Guide'",PS="'주기성 샘플링'";
@@ -2504,10 +2525,10 @@ async function exportProcTOEYear(p){
   const ROWS={daily:262,weekly:53,monthly:12,quarterly:4,semi:2,annual:1};
   if(Object.keys(byCls).length){
     const ps=wb.addWorksheet('주기성 샘플링');
-    ps.getCell('B1').value='주기성 통제 공통 샘플 (수식) — 1차 종료일 이하 기간은 1차, 이후는 2차 · 같은 주기의 L⊂M⊂H 자동 유지 · F열 강제: V=포함, X=제외';ps.getCell('B1').font={name:'맑은 고딕',size:12,bold:true};
+    ps.getCell('B1').value='주기성 통제 공통 샘플 — 1차 종료일 이하 기간은 1차, 이후는 2차 · 일별·주별 등 자동 선정 주기는 난수(L⊂M⊂H 유지, F열 강제 V/X) · 「직접 V」 주기는 선정 칸에 V를 직접 입력 → 같은 주기·위험수준 통제 시트에 반영 · 통제별로 다르게 하려면 각 통제 시트 증빙표의 기간 칸에서 드롭다운으로 선택';ps.getCell('B1').font={name:'맑은 고딕',size:12,bold:true};
     let pr=3;
     PERIOD_META.forEach(([cls,lb],ci)=>{
-      const gs=byCls[cls];if(!gs)return;const lvs=['H','M','L'].filter(lv=>gs.some(x=>x.lv===lv));const nrow=ROWS[cls];
+      const gs=byCls[cls];if(!gs)return;const lvs=['H','M','L'].filter(lv=>gs.some(x=>x.lv===lv));const nrow=ROWS[cls];const manual=(TOE.manualCls||[]).includes(cls);
       // 헤더 2행: 라벨 / 샘플수(연간·1차·2차)
       const h1=pr,h2=pr+1,s0=pr+2,e=s0+nrow-1;
       const hcell=(r,c,v,fill)=>{const x=ps.getCell(r,c);x.value=v;styleLabel(x);x.alignment={horizontal:'center',vertical:'middle',wrapText:true};if(fill)x.fill=fill};
@@ -2545,8 +2566,9 @@ async function exportProcTOEYear(p){
         lvs.forEach((lv,k)=>{const c0=7+k*4;const n1=colName(c0)+'$'+h2,n2=colName(c0+1)+'$'+h2;
           const rank=rd=>'COUNTIFS($E$'+s0+':$E$'+e+',"'+rd+'",$F$'+s0+':$F$'+e+',"<>X",$D$'+s0+':$D$'+e+',"<"&D'+r+')+1';
           const sel=(rd,nref)=>'IF(OR(C'+r+'="",E'+r+'<>"'+rd+'",F'+r+'="X"),"",IF(OR(F'+r+'="V",'+rank(rd)+'<='+nref+'),"V",""))';
-          const S1=ps.getCell(r,c0+1);S1.value={formula:sel('1차',n1)};styleVal(S1);S1.alignment={horizontal:'center'};
-          const S2=ps.getCell(r,c0+2);S2.value={formula:sel('2차',n2)};styleVal(S2);S2.alignment={horizontal:'center'};
+          const S1=ps.getCell(r,c0+1),S2=ps.getCell(r,c0+2);
+          if(manual){[S1,S2].forEach(x=>{x.value='';styleVal(x);x.alignment={horizontal:'center'};x.dataValidation=dvList(['V','']);x.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}}})}   // 직접 선택 — V 입력
+          else{S1.value={formula:sel('1차',n1)};styleVal(S1);S1.alignment={horizontal:'center'};S2.value={formula:sel('2차',n2)};styleVal(S2);S2.alignment={horizontal:'center'}}
           const N1=ps.getCell(r,c0);N1.value={formula:'IF('+colName(c0)+r+'="V",COUNTIF($'+colName(c0)+'$'+s0+':'+colName(c0)+r+',"V"),"")'};   // 연간 열 자리에 1차 No
           // 열 배치: c0 = 1차 No, c0+1 = 1차 선정, c0+2 = 2차 선정, c0+3 = 2차 No
           N1.value={formula:'IF('+colName(c0)+r+'="V",COUNTIF($'+colName(c0)+'$'+s0+':'+colName(c0)+r+',"V"),"")'};styleVal(N1);N1.alignment={horizontal:'center'};N1.font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
@@ -2555,11 +2577,13 @@ async function exportProcTOEYear(p){
       }
       // 헤더 라벨을 배치에 맞게 다시
       lvs.forEach((lv,k)=>{const c0=7+k*4;const gp=gs.find(x=>x.lv===lv);
-        ps.getCell(h1,c0).value='1차 No';ps.getCell(h1,c0+1).value=lv+' 1차 선정';ps.getCell(h1,c0+2).value=lv+' 2차 선정';ps.getCell(h1,c0+3).value='2차 No';
+        ps.getCell(h1,c0).value='1차 No';ps.getCell(h1,c0+1).value=lv+' 1차 선정'+(manual?'\n(직접 V)':'');ps.getCell(h1,c0+2).value=lv+' 2차 선정'+(manual?'\n(직접 V)':'');ps.getCell(h1,c0+3).value='2차 No';
         // 샘플수 셀: 연간(c0), 1차(c0+1), 2차(c0+2) — 값은 위 h2에 이미 기록. 라벨 보조
         ps.getCell(h2,c0+3).value={formula:'"연간 "&'+colName(c0-1)+h2+'&" · 1차 "&'+colName(c0)+h2+'&" · 2차 "&'+colName(c0+1)+h2,result:null};ps.getCell(h2,c0+3).font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
+        const cnt=cc=>'COUNTIF('+PS+'!$'+colName(cc)+'$'+s0+':$'+colName(cc)+'$'+e+',"V")';
         perRef[cls+'|'+lv]={lab:PS+'!$B$'+s0+':$B$'+e,no1:PS+'!$'+colName(c0-1)+'$'+s0+':$'+colName(c0-1)+'$'+e,no2:PS+'!$'+colName(c0+2)+'$'+s0+':$'+colName(c0+2)+'$'+e,
-          nA:PS+'!$'+colName(c0-1)+'$'+h2,n1:PS+'!$'+colName(c0)+'$'+h2,n2:PS+'!$'+colName(c0+1)+'$'+h2,n:gp.n,ctrls:gp.ctrls.join(', ')};
+          nA:PS+'!$'+colName(c0-1)+'$'+h2,n1:manual?cnt(c0):PS+'!$'+colName(c0)+'$'+h2,n2:manual?cnt(c0+1):PS+'!$'+colName(c0+1)+'$'+h2,n:gp.n,ctrls:gp.ctrls.join(', '),manual,nrow};
+        if(manual){const ck=ps.getCell(h2,c0+3);ck.value={formula:'"권장 1차 "&'+colName(c0)+h2+'&"·2차 "&'+colName(c0+1)+h2+'&" / 선택 1차 "&'+cnt(c0)+'&"·2차 "&'+cnt(c0+1),result:null};ck.font={name:'맑은 고딕',size:9,color:{argb:'FF8A4B00'}}}
         ps.getCell(h1,c0+3).value='2차 No · '+gp.ctrls.join(', ');
       });
       ps.addConditionalFormatting({ref:'B'+s0+':'+colName(6+lvs.length*4)+e,rules:[{type:'expression',formulae:['$E'+s0+'="1차"'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFF7F7F7'}}}}]});
@@ -2628,6 +2652,8 @@ async function exportProcTOEYear(p){
   const DV=x=>'IF(ISNUMBER('+x+'),'+x+',IFERROR(DATEVALUE(SUBSTITUTE(SUBSTITUTE('+x+',".","-"),"/","-")),IFERROR(DATE(LEFT('+x+',4),MID('+x+',5,2),MID('+x+',7,2)),0)))';   // 텍스트 날짜도 날짜로
   const popFx=(name,i,head,col)=>{const Q="'"+name.replace(/'/g,"''")+"'";return 'IFERROR(INDEX('+Q+'!$H$'+D0+':$ZZ$'+END+',MATCH('+i+','+Q+'!$'+col+'$'+D0+':$'+col+'$'+END+',0),MATCH("'+String(head).replace(/"/g,'""')+'",'+Q+'!$H$'+HDRROW+':$ZZ$'+HDRROW+',0)),"")'};
 
+  const evNOf=c=>{if(c.auto)return 1;if(c.cls==='event')return 60;const pr=perRef[c.cls+'|'+c.lv];return Math.max(1,c.annual||1,pr&&pr.manual?pr.nrow:0)};
+  const evCell={};                                  // 통제|차수 → [기간 칸 주소] (샘플요청이 통제 시트를 참조)
   /* 통제별 운영평가서 (1차·2차 블록 + 연간 결론) */
   p.ctrls.forEach((o,oi)=>{
     const ws=wb.addWorksheet(sname(o));
@@ -2647,7 +2673,9 @@ async function exportProcTOEYear(p){
     const flags=(label,items)=>{const it=items.filter(x=>on(x.key));if(!it.length)return;rows.push({t:'flags',label,items:it})};
     rows.push({t:'sec',label:RL('sec1')});
     rows.push({t:'val',label:RL('closing'),value:TOE.closing?ymd(TOE.closing):''});rows.push({t:'val',label:RL('company'),value:FILEMETA.company||''});
-    kv2(RL('cycle'),['cycleCode','cycleName']);kv2(RL('process'),['processCode','processName']);kv2(RL('subprocess'),['subProcessCode','subProcessName']);
+    {const shown=new Set();const kvP=k=>{if(!on(k)||MAP[k]==null||shown.has(MAP[k]))return;shown.add(MAP[k]);kv(L(k),k)};   // 설계평가와 같은 표현: 항목별 한 행, 같은 열은 한 번만
+     const cyc=['cycleCode','cycleName'].filter(k=>MAP[k]!=null&&MAP[k]!==MAP.processCode&&MAP[k]!==MAP.processName);
+     cyc.concat(['processCode','processName','subProcessCode','subProcessName']).forEach(kvP)}
     flags(RL('riskType'),[{key:'rtFR',cap:'재무보고 신뢰성'},{key:'rtAsset',cap:'자산보호'},{key:'rtFraud',cap:'부정방지'}]);
     kv(RL('risk'),'riskCode',RL('riskCode'));kv(RL('risk'),'riskName',RL('riskDesc'));
     kv(RL('ir'),'irLevel');kv(RL('cr'),'crLevel');kv(RL('crDesc'),'crDesc');kv(RL('account'),'account');
@@ -2671,7 +2699,7 @@ async function exportProcTOEYear(p){
     rows.push({t:'val',label:RL('test'),sub:RL('method'),value:t.method||(c.auto?'해당없음(자동통제)':'무작위 추출')});
     rows.push({t:'sec',label:RL('sec2')});
     kv(RL('dept'),'controlDept');kv(RL('preparer'),'controlOwner');kv(RL('reviewer'),'reviewer');
-    const evN=c.auto?1:c.cls==='event'?60:Math.max(1,c.annual||1);
+    const evN=evNOf(c);
     rows.push({t:'block',rd:'1차',evN});rows.push({t:'block',rd:'2차',evN});
     rows.push({t:'concl'});
     let rr=4;rows.forEach(x=>{if(x.t==='flags')x.row=rr,rr+=2;else if(x.t==='block')x.row=rr,rr+=1+5+2+x.evN+7+1;else if(x.t==='concl')x.row=rr,rr+=9;else x.row=rr,rr+=1;if(x.t==='code')anchor='$C$'+x.row});
@@ -2709,7 +2737,8 @@ async function exportProcTOEYear(p){
           if(PQ){const act=actRef;valc(r,1,1,{formula:'IF('+no+'<='+act+','+no+',"")'},{center:true});ev.forEach((cdef,j)=>{const cc=valc(r,2+j,2+j,{formula:popFx(pn,no,clean(cdef.src)||clean(cdef.label),noCol)});if(j===dateIdx)cc.numFmt='yyyy-mm-dd'});
             valc(r,tcS,tcE,{formula:'IF('+no+'<='+act+',"'+TXT+'","")'});valc(r,9,9,{formula:'IF('+no+'<='+act+',"예외사항 없음","")'},{dv:OPT_EV_RESULT})}
           else if(pref){const noRef=is1?pref.no1:pref.no2;valc(r,1,1,{formula:'IF('+no+'<='+nRef+','+no+',"")'},{center:true});
-            ev.forEach((cdef,j)=>valc(r,2+j,2+j,j===dateIdx?{formula:'IFERROR(INDEX('+pref.lab+',MATCH('+no+','+noRef+',0)),"")'}:''));
+            ev.forEach((cdef,j)=>{const cc=valc(r,2+j,2+j,j===dateIdx?{formula:'IFERROR(INDEX('+pref.lab+',MATCH('+no+','+noRef+',0)),"")'}:'');
+              if(j===dateIdx){cc.dataValidation={type:'list',allowBlank:true,showErrorMessage:false,formulae:[pref.lab]};(evCell[o.controlCode+'|'+rd]=evCell[o.controlCode+'|'+rd]||[]).push(qs(ws.name)+'!$'+colName(1+j)+'$'+r)}});
             valc(r,tcS,tcE,{formula:'IF('+no+'<='+nRef+',"'+TXT+'","")'});valc(r,9,9,{formula:'IF('+no+'<='+nRef+',"예외사항 없음","")'},{dv:OPT_EV_RESULT})}
           else{valc(r,1,1,no,{center:true});ev.forEach((cdef,j)=>valc(r,2+j,2+j,''));valc(r,tcS,tcE,c.auto?'설정/권한 화면 캡쳐로 통제 설계·운영 확인':TXT);valc(r,9,9,'예외사항 없음',{dv:OPT_EV_RESULT})}
           r++}
@@ -2765,13 +2794,14 @@ async function exportProcTOEYear(p){
         const rv=sq.getCell(row,9+LB.length);rv.value='';styleVal(rv);rv.dataValidation=dvList(['','입수','미입수','부분입수'])};
       if(c.auto){const noE='IF('+FLT('1차')+',"N/A","")';base(r,'1차',noE);const cc=sq.getCell(r,8);cc.value={formula:'IF('+noE+'="","","설정/권한 화면 캡쳐 (모집단 N/A)")'};styleVal(cc);r++;return}
       ['1차','2차'].forEach(rd=>{
-        const is1=rd==='1차';const N=PQ?60:Math.max(1,c.annual||1);
+        const is1=rd==='1차';const N=PQ?60:(pref?evNOf(c):Math.max(1,c.annual||1));const ecs=evCell[o.controlCode+'|'+rd]||[];
         for(let i=1;i<=N;i++){
           let noE;
           if(PQ){const act=is1?PQ+'!$D$9':PQ+'!$D$10';noE='IF(AND('+FLT(rd)+','+i+'<='+act+'),'+i+',"")';base(r,rd,noE);
             ev.forEach((cdef,j)=>{const col=colOf(cdef.label);if(col==null)return;const cc=sq.getCell(r,col);cc.value={formula:'IF('+noE+'="","",'+popFx(pn,i,clean(cdef.src)||clean(cdef.label),is1?'A':'B')+')'};styleVal(cc);if(j===dateIdx)cc.numFmt='yyyy-mm-dd'})}
-          else if(pref){const nref=is1?pref.n1:pref.n2,noRef=is1?pref.no1:pref.no2;noE='IF(AND('+FLT(rd)+','+i+'<='+nref+'),'+i+',"")';base(r,rd,noE);
-            const cdef=ev[dateIdx]||ev[0];const col=cdef?colOf(cdef.label):8;if(col!=null){const cc=sq.getCell(r,col);cc.value={formula:'IF('+noE+'="","",IFERROR(INDEX('+pref.lab+',MATCH('+i+','+noRef+',0)),""))'};styleVal(cc)}}
+          else if(pref&&ecs[i-1]){const er=ecs[i-1];noE='IF(AND('+FLT(rd)+','+er+'<>""),'+i+',"")';base(r,rd,noE);     // 통제 시트 기간 칸(공통 샘플 또는 통제별 선택)
+            const cdef=ev[dateIdx]||ev[0];const col=cdef?colOf(cdef.label):8;if(col!=null){const cc=sq.getCell(r,col);cc.value={formula:'IF('+noE+'="","",'+er+')'};styleVal(cc)}}
+          else if(pref){noE='""';base(r,rd,noE)}
           else{noE='IF('+FLT(rd)+','+i+',"")';base(r,rd,noE)}
           r++}
       });
