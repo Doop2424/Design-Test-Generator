@@ -126,7 +126,7 @@
     <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
     <button class="ghost" id="loadProjTop">불러오기</button>
     <span class="samp" id="saveStat" style="max-width:none"></span>
-    <div class="stage">v4.5</div>
+    <div class="stage">v4.7</div>
   </div>
 </header>
 
@@ -289,6 +289,10 @@
     <button id="prevFileBtn" style="display:none" title="이 툴로 만든 1차 운영평가 파일(xlsx)을 읽어 1차 결과·모집단·선정을 2차 파일에 병합">1차 파일 불러오기 (2차 병합)</button><input type="file" id="prevFile" accept=".xlsx" style="display:none">
     <button class="ghost" id="clearPrev" style="display:none" title="저장된 1차 선정 정보 삭제">1차 정보 지우기</button>
     <button class="ghost" id="perResel" style="display:none">재선정</button></div>
+  <div class="row" style="padding:10px 16px 0;align-items:center">
+    <button id="carryBtn" title="통제 유형 변경·통제 추가/삭제·RCM 수정 후 다시 내보낼 때, 기존 운영평가 파일에 작성한 내용을 새 파일로 옮겨 담음">기존 운영평가 파일에서 작성 내용 가져오기</button><input type="file" id="carryFile" accept=".xlsx" style="display:none">
+    <span class="samp" id="carryInfo" style="max-width:none">통제를 건별↔자동↔주기성으로 바꾸거나 통제를 추가·삭제한 뒤에는 RCM을 고쳐 다시 내보내고, 이 버튼으로 기존 파일을 올리면 모집단·직접선정·주기성 V·증빙표 입력·결론·수행자·진행현황을 새 파일에 다시 채웁니다.</span>
+  </div>
   <div id="prevInfo" class="samp hidden" style="max-width:none;padding:6px 16px 0"></div>
   <div id="holidayBox" class="hidden" style="padding:6px 16px 0">
     <div class="row" style="margin-bottom:6px;align-items:center"><label class="f" style="flex-direction:row;align-items:center;gap:6px"><input type="radio" name="hmode" value="list" id="hmodeList"> 공휴일 제외 — 날짜 고정 공휴일(신정·삼일절·어린이날·현충일·광복절·개천절·한글날·성탄절 + 대체공휴일)은 <b>연도 무관 자동</b>, 설·추석·부처님오신날·선거일은 아래 목록</label>
@@ -1453,6 +1457,64 @@ document.getElementById('holidayBtn').onclick=()=>{const b=document.getElementBy
 ['hmodeList','hmodeWeekend'].forEach(id=>document.getElementById(id).onchange=e=>{TOE.holidayMode=e.target.value;Object.keys(TOE.periodic||{}).forEach(k=>{if(!TOE.periodic[k].manual)delete TOE.periodic[k]});renderTOE()});
 document.getElementById('holidayTxt').onchange=e=>{TOE.holidays=e.target.value;Object.keys(TOE.periodic||{}).forEach(k=>{if(!TOE.periodic[k].manual)delete TOE.periodic[k]});renderTOE()};
 document.getElementById('holidayDefault').onclick=()=>{delete TOE.holidays;holidayTxt.value=DEF_HOLIDAYS;renderTOE()};
+let CARRY=null;
+document.getElementById('carryBtn').onclick=()=>document.getElementById('carryFile').click();
+document.getElementById('carryFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async ev=>{try{await loadCarryFile(ev.target.result,f.name)}catch(err){console.error(err);alert('파일을 읽지 못했습니다: '+err.message)}};r.readAsArrayBuffer(f);e.target.value=''};
+async function loadCarryFile(buf,fname){
+  const wb=new ExcelJS.Workbook();await wb.xlsx.load(buf);
+  const isF=ce=>{const v=ce&&ce.value;return !!(v&&typeof v==='object'&&('formula' in v||'sharedFormula' in v))};
+  const raw=ce=>{const v=ce&&ce.value;if(v==null)return null;if(v instanceof Date)return v;if(typeof v==='object'){if(v.richText)return v.richText.map(t=>t.text).join('');if('text' in v)return v.text;return null}return v};
+  const txt=ce=>String(cellVal(ce)==null?'':cellVal(ce)).trim();
+  const slave=ce=>ce.isMerged&&ce.master&&ce.master.address!==ce.address;
+  const C={file:fname,ctrls:{},pop:{},per:{},prog:{}};
+  const SYS=['운영평가','샘플요청','샘플요청_전체','요청증빙','RCM참조','샘플 Guide','주기성 샘플링','_toe_meta','설계평가'];
+  const names=new Set(wb.worksheets.map(w=>w.name));
+  // 진행현황
+  const ix=wb.getWorksheet('운영평가');
+  if(ix){let pc=null;for(let c=1;c<=25;c++){if(/진행현황/.test(txt(ix.getCell(6,c))))pc=c}
+    if(pc)for(let r=7;r<=ix.rowCount;r++){const code=txt(ix.getCell(r,2));const ce=ix.getCell(r,pc);if(code&&!isF(ce)&&raw(ce))C.prog[code]=raw(ce)}}
+  // 모집단 시트
+  wb.worksheets.filter(w=>/^P_/.test(w.name)).forEach(ws=>{
+    let hr=null;for(let r=1;r<=40;r++){if(txt(ws.getCell(r,1))==='1차 샘플No'){hr=r;break}}if(!hr)return;
+    const code=txt(ws.getCell(3,3))||ws.name.replace(/^P_/,'');
+    const SYSH=/^(1차 샘플No|2차 샘플No|난수|필수|구분|순위|후보난수1차|후보난수2차|직접선정|1차 기테스트|샘플No)/;
+    let dirCol=null,ds=null,last=0;
+    for(let c=1;c<=800;c++){const h=txt(ws.getCell(hr,c));if(/^직접선정/.test(h))dirCol=c;if(h&&!SYSH.test(h)&&ds==null&&c>=6)ds=c;if(h)last=c}
+    if(!ds)return;
+    const heads=[];for(let c=ds;c<=last;c++)heads.push(txt(ws.getCell(hr,c)));
+    const rows=[];for(let r=hr+1;r<=ws.rowCount;r++){const vals=heads.map((h,i)=>raw(ws.getCell(r,ds+i)));if(vals.every(v=>v==null||v===''))continue;rows.push({vals,dir:dirCol?raw(ws.getCell(r,dirCol)):null})}
+    const prm={};[12,13,14,15,16].forEach(rr=>{const ce=ws.getCell(rr,3);if(!isF(ce))prm['C'+rr]=raw(ce)});{const ce=ws.getCell(17,4);if(!isF(ce))prm.D17=raw(ce)}
+    C.pop[code]={heads,rows,prm};
+  });
+  // 통제 시트
+  wb.worksheets.forEach(ws=>{
+    if(SYS.includes(ws.name)||/^P_/.test(ws.name))return;
+    const hdrs=[];for(let r=1;r<=ws.rowCount;r++){if(txt(ws.getCell(r,1))===RL('evNo'))hdrs.push(r)}
+    if(!hdrs.length)return;
+    let code=null;for(let r=1;r<=80;r++){if(txt(ws.getCell(r,1))===RL('code')){code=txt(ws.getCell(r,3));break}}code=code||ws.name;
+    const rec={sheet:ws.name,ev:{},concl:{},perf:{},cat:'auto'};
+    const f1=ws.getCell(hdrs[0]+1,3).value;const ftxt=f1&&typeof f1==='object'&&f1.formula?f1.formula:'';
+    if(names.has(('P_'+ws.name).substring(0,31))||/'P_/.test(ftxt))rec.cat='event';else if(/주기성 샘플링/.test(ftxt))rec.cat='periodic';
+    hdrs.slice(0,2).forEach((h,bi)=>{const rd=bi?'2차':'1차';const rows=[];let r=h+1;
+      for(;r<=ws.rowCount&&txt(ws.getCell(r,2))!==RL('conclResult');r++){const o={};for(let c=1;c<=9;c++){const ce=ws.getCell(r,c);if(slave(ce)||isF(ce))continue;const v=raw(ce);if(v!=null&&v!=='')o[c]=v}rows.push(o)}
+      rec.ev[rd]=rows;const cl=[];for(let k=0;k<7;k++){const ce=ws.getCell(r+k,3);cl.push(isF(ce)?undefined:raw(ce))}rec.concl[rd]=cl});
+    for(let r=1;r<=ws.rowCount;r++){const v=txt(ws.getCell(r,1));
+      if(/연간 종합/.test(v)){const cl=[];for(let k=1;k<=7;k++){const ce=ws.getCell(r+k,3);cl.push(isF(ce)?undefined:raw(ce))}rec.concl.year=cl}
+      const m=v.match(/^(1차|2차)\s*(평가 수행자|검토자)/);if(m)rec.perf[m[1]+'|'+(m[2]==='검토자'?'rev':'perf')]=[raw(ws.getCell(r,4)),raw(ws.getCell(r,7))]}
+    C.ctrls[code]=rec;
+  });
+  // 주기성 V
+  const ps=wb.getWorksheet('주기성 샘플링');
+  if(ps){let sec=null,h1=null;
+    for(let r=1;r<=ps.rowCount;r++){const b=txt(ps.getCell(r,2));
+      if(/ 기간$/.test(b)){if(b!==sec){sec=b;h1=r}continue}   // 병합된 제목(2행)은 첫 행만
+      if(!sec||r<h1+2||!b)continue;
+      for(let c=6;c<=40;c++){const hh=txt(ps.getCell(h1,c)).replace(/\n.*$/s,'').trim();if(!/선정|강제/.test(hh))continue;const ce=ps.getCell(r,c);if(isF(ce))continue;const v=raw(ce);if(v)C.per[sec+'|'+b+'|'+hh]=v}}}
+  CARRY=C;
+  const nc=Object.keys(C.ctrls).length,np=Object.keys(C.pop).length,nv=Object.keys(C.per).length;
+  document.getElementById('carryInfo').innerHTML='<b>'+esc(fname)+'</b> — 통제 시트 '+nc+'개 · 모집단 시트 '+np+'개('+Object.values(C.pop).reduce((a,x)=>a+x.rows.length,0)+'행) · 주기성 직접 V '+nv+'건 · 진행현황 '+Object.keys(C.prog).length+'건 읽음. 지금 운영평가로 내보내면 새 파일에 채워집니다. <button class="ghost tiny" id="carryClear">해제</button>';
+  document.getElementById('carryClear').onclick=()=>{CARRY=null;document.getElementById('carryInfo').textContent='해제됨'};
+}
 document.getElementById('prevFileBtn').onclick=()=>document.getElementById('prevFile').click();
 document.getElementById('prevFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async ev=>{try{await loadPrevFile(ev.target.result,f.name)}catch(err){alert('1차 파일을 읽지 못했습니다: '+err.message)}};r.readAsArrayBuffer(f);e.target.value=''};
 const cellVal=c=>{const v=c&&c.value;if(v==null)return '';if(v instanceof Date)return fmtD(v);if(typeof v==='object'){if('result' in v)return v.result==null?'':(v.result instanceof Date?fmtD(v.result):v.result);if(v.richText)return v.richText.map(t=>t.text).join('');if('text' in v)return v.text;return ''}return v};
@@ -2497,7 +2559,7 @@ async function exportProcTOEYear(p0){
   IH.forEach((h,i)=>{const c=idx.getRow(6).getCell(2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center',vertical:'middle',wrapText:true}});
   const lastIdx=6+p.ctrls.length;
   const D0=22,HDRROW=21,END=1048576;const popMaxOf=o=>HDRROW+((o&&o.toe&&o.toe.popRows)||TOE.popRows||1000);const PMAXBY={};
-  const popRef={};p.ctrls.forEach(o=>{if(toeCalc(o).cls==='event'){popRef[o.controlCode]=psname(o);PMAXBY[psname(o)]=popMaxOf(o)}});
+  const popRef={};p.ctrls.forEach(o=>{if(toeCalc(o).cls==='event'){popRef[o.controlCode]=psname(o);const cp=CARRY&&CARRY.pop[o.controlCode];PMAXBY[psname(o)]=Math.max(popMaxOf(o),cp?HDRROW+cp.rows.length+50:0)}});
 
   writeReqSheet(wb,p,fx);
 
@@ -2519,6 +2581,18 @@ async function exportProcTOEYear(p0){
   [26,12,12,10,10,10].forEach((w,i)=>g.getColumn(2+i).width=w);g.getColumn(1).width=3;
   const annualEventFx=(lvCell,yrCell)=>'INDEX('+G+'!$E$'+EV0+':$G$'+EV1+',MATCH('+yrCell+','+G+'!$C$'+EV0+':$C$'+EV1+',1),'+lvMatch(lvCell)+')';
 
+  const perLabelAt=(cls,i)=>{                              // 주기성 시트 i번째 행의 기간 라벨(엑셀 수식과 같은 규칙) — 기존 V 복원용
+    const F0=new Date(from),T0=new Date(to),p2=n=>String(n).padStart(2,'0'),ymd=d=>d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());let d;
+    if(cls==='monthly')d=new Date(F0.getFullYear(),F0.getMonth()+i,Math.min(F0.getDate(),28));
+    else if(cls==='quarterly')d=new Date(F0.getFullYear(),Math.floor(F0.getMonth()/3)*3+3*i,1);
+    else if(cls==='semi')d=new Date(F0.getFullYear(),(F0.getMonth()<6?0:6)+6*i,1);
+    else if(cls==='annual')d=new Date(F0.getFullYear()+i,0,1);
+    else if(cls==='weekly'){d=new Date(F0);d.setDate(d.getDate()-((d.getDay()+6)%7)+7*i)}
+    else{const hs=holidaySet();d=new Date(F0);d.setDate(d.getDate()-1);let k=0;while(k<i+1){d.setDate(d.getDate()+1);if(d.getDay()%6!==0&&!hs.has(ymd(d)))k++}}
+    if(d>T0)return '';
+    if(cls==='monthly')return d.getFullYear()+'-'+p2(d.getMonth()+1);if(cls==='quarterly')return d.getFullYear()+' '+(Math.floor(d.getMonth()/3)+1)+'분기';
+    if(cls==='semi')return d.getFullYear()+(d.getMonth()<6?' 상반기':' 하반기');if(cls==='annual')return d.getFullYear()+'년';
+    if(cls==='weekly'){const e=new Date(d);e.setDate(e.getDate()+6);return ymd(d)+' ~ '+ymd(e)}return ymd(d)};
   /* 주기성 샘플링 (수식) */
   const groups=perGroups(),byCls={};Object.values(groups).forEach(gp=>{(byCls[gp.cls]=byCls[gp.cls]||[]).push(gp)});
   const perRef={};                              // cls|lv → {lab, no1, no2, n, n1, n2 cell refs}
@@ -2562,12 +2636,13 @@ async function exportProcTOEYear(p0){
         const Bc=ps.getCell(r,2);Bc.value={formula:'IF(C'+r+'="","",'+lab+')'};styleVal(Bc);
         const D=ps.getCell(r,4);D.value={formula:'IF(C'+r+'="","",MOD(ABS(SIN(('+SEED+'+ROW()+'+(ci*1000)+')*12.9898))*43758.5453,1))'};D.numFmt='0.0000';styleVal(D);
         const E=ps.getCell(r,5);E.value={formula:'IF(C'+r+'="","",IF(C'+r+'<='+R1TO+',"1차","2차"))'};styleVal(E);E.alignment={horizontal:'center'};
-        const F=ps.getCell(r,6);F.value='';styleVal(F);F.dataValidation=dvList(['V','X','']);F.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
+        const plab=perLabelAt(cls,i);const ck=hh=>CARRY&&CARRY.per[lb+' 기간|'+plab+'|'+hh];
+        const F=ps.getCell(r,6);F.value=ck('강제')||'';styleVal(F);F.dataValidation=dvList(['V','X','']);F.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
         lvs.forEach((lv,k)=>{const c0=7+k*4;const n1=colName(c0)+'$'+h2,n2=colName(c0+1)+'$'+h2;
           const rank=rd=>'COUNTIFS($E$'+s0+':$E$'+e+',"'+rd+'",$F$'+s0+':$F$'+e+',"<>X",$D$'+s0+':$D$'+e+',"<"&D'+r+')+1';
           const sel=(rd,nref)=>'IF(OR(C'+r+'="",E'+r+'<>"'+rd+'",F'+r+'="X"),"",IF(OR(F'+r+'="V",'+rank(rd)+'<='+nref+'),"V",""))';
           const S1=ps.getCell(r,c0+1),S2=ps.getCell(r,c0+2);
-          if(manual){[S1,S2].forEach(x=>{x.value='';styleVal(x);x.alignment={horizontal:'center'};x.dataValidation=dvList(['V','']);x.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}}})}   // 직접 선택 — V 입력
+          if(manual){[S1,S2].forEach((x,xi)=>{x.value=ck(lv+' '+(xi?'2차':'1차')+' 선정')||'';styleVal(x);x.alignment={horizontal:'center'};x.dataValidation=dvList(['V','']);x.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}}})}   // 직접 선택 — V 입력
           else{S1.value={formula:sel('1차',n1)};styleVal(S1);S1.alignment={horizontal:'center'};S2.value={formula:sel('2차',n2)};styleVal(S2);S2.alignment={horizontal:'center'}}
           const N1=ps.getCell(r,c0);N1.value={formula:'IF('+colName(c0)+r+'="V",COUNTIF($'+colName(c0)+'$'+s0+':'+colName(c0)+r+',"V"),"")'};   // 연간 열 자리에 1차 No
           // 열 배치: c0 = 1차 No, c0+1 = 1차 선정, c0+2 = 2차 선정, c0+3 = 2차 No
@@ -2596,24 +2671,24 @@ async function exportProcTOEYear(p0){
   
   const makePopSheet=o=>{
     const c=toeCalc(o);if(c.cls!=='event')return;
-    const t=toeOf(o),name=popRef[o.controlCode];dropSheet(name);const PMAX=popMaxOf(o);PMAXBY[name]=PMAX;
+    const t=toeOf(o),name=popRef[o.controlCode];dropSheet(name);const PMAX=PMAXBY[name]||popMaxOf(o);
     const ws=wb.addWorksheet(name,{views:[{state:'frozen',ySplit:HDRROW}]});
     ws.getCell('B1').value='모집단 · 샘플 선정 (연간 통합) — '+o.controlCode+' '+(o.controlName||'');ws.getCell('B1').font={name:'맑은 고딕',size:13,bold:true};
-    ws.getCell('H1').value='① '+D0+'행부터 H열 이후에 모집단을 붙여넣기(열 개수 제한 없음) (연간 전체 또는 1차분 먼저, 2차분은 뒤에 이어서) — '+HDRROW+'행 헤더 이름은 증빙평가 표 「연결 열」과 같아야 함 ② 일자 열 값이 1차 종료일 이하면 1차, 이후면 2차로 자동 구분 ③ A열=1차 샘플No, B열=2차 샘플No가 자동으로 붙고 통제 시트에 반영. ④ 모집단이 수식이 채워진 행('+(PMAX-HDRROW)+'행)보다 많으면: 마지막 수식 행의 A~G열을 선택해 채우기 핸들을 더블클릭(데이터 끝까지 자동 복사). A~G는 수식 열이니 모집단은 H열부터. 1차 완료 후 D17에 1차 샘플수를 확정하면 2차 때 모집단이 늘어도 1차 선정이 바뀌지 않습니다.';
-    ws.getCell('H1').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};ws.getCell('H1').alignment={wrapText:true,vertical:'top'};ws.mergeCells('H1:R4');
+    ws.getCell('I1').value='① '+D0+'행부터 I열 이후에 모집단을 붙여넣기(열 개수 제한 없음) (연간 전체 또는 1차분 먼저, 2차분은 뒤에 이어서) — '+HDRROW+'행 헤더 이름은 증빙평가 표 「연결 열」과 같아야 함 ② 일자 열 값이 1차 종료일 이하면 1차, 이후면 2차로 자동 구분 ③ A열=1차 샘플No, B열=2차 샘플No가 자동으로 붙고 통제 시트에 반영. ④ 모집단이 수식이 채워진 행('+(PMAX-HDRROW)+'행)보다 많으면: 마지막 수식 행의 A~G열을 선택해 채우기 핸들을 더블클릭(데이터 끝까지 자동 복사). A~G는 수식 열, H열은 「직접선정」 입력칸, 모집단은 I열부터. ⑤ 모집단에서 미리 고른 샘플이 있으면 H열에 V — 그 차수에 V가 하나라도 있으면 난수 대신 V 표시 건만 샘플로 씁니다(1차/2차 각각). 일자는 날짜·2026-01-06·2026.01.06·20260106 모두 인식. 1차 완료 후 D17에 1차 샘플수를 확정하면 2차 때 모집단이 늘어도 1차 선정이 바뀌지 않습니다.';
+    ws.getCell('I1').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};ws.getCell('I1').alignment={wrapText:true,vertical:'top'};ws.mergeCells('I1:S4');
     const cols=evColsOf(o);const heads=cols.map(x=>clean(x.src)||clean(x.label)).filter(Boolean);
     if(!heads.some(h=>/금액|amount|amt|공급가/i.test(h)))heads.push('금액');
     if(!heads.some(h=>/일자|날짜|date|기간/i.test(h)))heads.push('일자');
     const dateHead=heads.find(h=>/일자|날짜|date|기간/i.test(h))||'',amtHead=heads.find(h=>/금액|amount|amt|공급가/i.test(h))||'';
-    const KEY='$H$'+D0+':$H$'+END,ROUND='$E$'+D0+':$E$'+END,DR='$H$'+D0+':$ZZ$'+END,HR='$H$'+HDRROW+':$ZZ$'+HDRROW,RND='$C$'+D0+':$C$'+END,MUST='$D$'+D0+':$D$'+END;
+    const KEY='$I$'+D0+':$I$'+END,ROUND='$E$'+D0+':$E$'+END,DR='$I$'+D0+':$ZZ$'+END,HR='$I$'+HDRROW+':$ZZ$'+HDRROW,RND='$C$'+D0+':$C$'+END,MUST='$D$'+D0+':$D$'+END;
     const P=[
       ['통제코드',o.controlCode],['위험수준 (H/M/L)',c.lv],
       ['1차 모집단 건수',{formula:'COUNTIF('+ROUND+',"1차")',result:c.pop||0}],
       ['2차 모집단 건수',{formula:'COUNTIF('+ROUND+',"2차")',result:0}],
       ['연간 기준 건수',{formula:'IF(C6=0,ROUND(C5*12/((YEAR('+R1TO+')-YEAR('+FROM+'))*12+MONTH('+R1TO+')-MONTH('+FROM+')+1),0),C5+C6)',result:c.pop||0}],
       ['연간 샘플수',{formula:'IF(C7=0,0,'+annualEventFx('C4','C7')+')',result:c.annual||0}],
-      ['1차 샘플수',{formula:'IF(D17<>"",D17,MIN(C5,'+CAP+',CEILING(C8*'+RATIO+'/100,1)))',result:c.n||0}],
-      ['2차 샘플수',{formula:'MIN(C6,'+CAP+',MAX(0,C8-C9))',result:0}],
+      ['1차 샘플수',{formula:'IF(D17<>"",D17,IF($F$18>0,$F$18,MIN(C5,'+CAP+',CEILING(C8*'+RATIO+'/100,1))))',result:c.n||0}],
+      ['2차 샘플수',{formula:'IF($F$19>0,$F$19,MIN(C6,'+CAP+',MAX(0,C8-C9)))',result:0}],
       ['난수 seed',(TOE.seed||12345)+(o.srcRow||0)],
       ['필수 포함 — 금액 열 이름',amtHead],['필수 포함 — 금액 기준(이상)',t.amtMin!=null?t.amtMin:''],
       ['일자 열 이름 (1차/2차 구분·월 기준)',dateHead],['필수 포함 — 월(쉼표, 예: 3,6)',t.months||''],['필수 포함 — 금액 상위 N건',t.topN!=null?t.topN:''],
@@ -2625,32 +2700,40 @@ async function exportProcTOEYear(p0){
      const b=ws.getCell('D10');b.value={formula:'MAX($B$'+D0+':$B$'+END+')',result:0};styleVal(b);ws.getCell('E10').value='← 2차 실제 선정 (필수 포함으로 샘플수 초과 가능)';ws.getCell('E10').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
     {const l18=ws.getCell('B18');l18.value='1차 임계 난수(자동)';styleLabel(l18);const t1=ws.getCell('C18');t1.value={formula:'IFERROR(SMALL($F$'+D0+':$F$'+END+',MAX(0,$C$9-COUNTIFS('+ROUND+',"1차",'+MUST+',1))),0)',result:0};styleVal(t1);
      const l19=ws.getCell('B19');l19.value='2차 임계 난수(자동)';styleLabel(l19);const t2=ws.getCell('C19');t2.value={formula:'IFERROR(SMALL($G$'+D0+':$G$'+END+',MAX(0,$C$10-COUNTIFS('+ROUND+',"2차",'+MUST+',1))),0)',result:0};styleVal(t2);
-     ws.getCell('D18').value='← 필수 제외 후 남는 샘플수만큼 작은 난수의 경계값. 이 값 이하가 선정';ws.getCell('D18').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
-    {const l=ws.getCell('B20');l.value='수식 미적용 모집단 행';styleLabel(l);const w=ws.getCell('C20');w.value={formula:'MAX(0,COUNTA($H$'+D0+':$H$'+END+')-COUNTIF($E$'+D0+':$E$'+END+',"?차"))',result:0};styleVal(w);
+     ws.getCell('D18').value='← 난수 경계값';ws.getCell('D18').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};
+     [['E18','직접선정 1차','F18','1차'],['E19','직접선정 2차','F19','2차']].forEach(([la,lt,va,rd])=>{const l=ws.getCell(la);l.value=lt;styleLabel(l);const v=ws.getCell(va);v.value={formula:'COUNTIFS('+ROUND+',"'+rd+'",$H$'+D0+':$H$'+END+',"<>")',result:0};styleVal(v)});
+     ws.getCell('G18').value='← H열 V 건수. 0보다 크면 그 차수는 V 건만 샘플(난수 미사용)';ws.getCell('G18').font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}}}
+    {const l=ws.getCell('B20');l.value='수식 미적용 모집단 행';styleLabel(l);const w=ws.getCell('C20');w.value={formula:'MAX(0,COUNTA($I$'+D0+':$I$'+END+')-COUNTIF($E$'+D0+':$E$'+END+',"?차"))',result:0};styleVal(w);
      const m=ws.getCell('D20');m.value={formula:'IF(C20>0,"⚠ 모집단 "&C20&"행에 수식이 없어 집계·선정에서 빠졌습니다 → 마지막 수식 행의 A~G열을 선택해 채우기 핸들 더블클릭","")',result:''};m.font={name:'맑은 고딕',size:10,bold:true,color:{argb:'FFC00000'}};
      ws.addConditionalFormatting({ref:'C20',rules:[{type:'expression',formulae:['$C$20>0'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFC7CE'}},font:{color:{argb:'FF9C0006'},bold:true}}}]})}
-    const H0=['1차 샘플No','2차 샘플No','난수','필수','구분','후보난수1차','후보난수2차'].concat(heads);
-    H0.forEach((h,i)=>{const cc=ws.getCell(HDRROW,1+i);cc.value=h;styleLabel(cc);cc.alignment={horizontal:'center',vertical:'middle',wrapText:true};if(i>=7)cc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE2EFDA'}};if(i===5||i===6)cc.font={name:'맑은 고딕',size:8,color:{argb:'FF9A9A9A'}}});
+    const H0=['1차 샘플No','2차 샘플No','난수','필수','구분','후보난수1차','후보난수2차','직접선정\n(V)'].concat(heads);
+    H0.forEach((h,i)=>{const cc=ws.getCell(HDRROW,1+i);cc.value=h;styleLabel(cc);cc.alignment={horizontal:'center',vertical:'middle',wrapText:true};if(i>=8)cc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE2EFDA'}};if(i===7)cc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFE699'}};if(i===5||i===6)cc.font={name:'맑은 고딕',size:8,color:{argb:'FF9A9A9A'}}});
     for(let r=D0;r<=PMAX;r++){
-      ws.getCell(r,3).value={formula:'IF($H'+r+'="","",MOD(ABS(SIN(($C$11+ROW())*12.9898))*43758.5453,1))'};ws.getCell(r,3).numFmt='0.0000';
-      ws.getCell(r,4).value={formula:'IF($H'+r+'="","",IF(OR('+
-        'AND($C$13<>"",IFERROR(INDEX($H'+r+':$ZZ'+r+',MATCH($C$12,'+HR+',0))>=$C$13,FALSE)),'+
-        'AND($C$15<>"",IFERROR(ISNUMBER(SEARCH(","&MONTH('+DV('INDEX($H'+r+':$ZZ'+r+',MATCH($C$14,'+HR+',0))')+')&",",","&SUBSTITUTE($C$15," ","")&",")),FALSE)),'+
-        'AND(N($C$16)>0,IFERROR(RANK(INDEX($H'+r+':$ZZ'+r+',MATCH($C$12,'+HR+',0)),INDEX('+DR+',0,MATCH($C$12,'+HR+',0)))<=$C$16,FALSE))'+
+      ws.getCell(r,3).value={formula:'IF($I'+r+'="","",MOD(ABS(SIN(($C$11+ROW())*12.9898))*43758.5453,1))'};ws.getCell(r,3).numFmt='0.0000';
+      ws.getCell(r,4).value={formula:'IF($I'+r+'="","",IF(OR('+
+        'AND($C$13<>"",IFERROR(INDEX($I'+r+':$ZZ'+r+',MATCH($C$12,'+HR+',0))>=$C$13,FALSE)),'+
+        'AND($C$15<>"",IFERROR(ISNUMBER(SEARCH(","&MONTH('+DV('INDEX($I'+r+':$ZZ'+r+',MATCH($C$14,'+HR+',0))')+')&",",","&SUBSTITUTE($C$15," ","")&",")),FALSE)),'+
+        'AND(N($C$16)>0,IFERROR(RANK(INDEX($I'+r+':$ZZ'+r+',MATCH($C$12,'+HR+',0)),INDEX('+DR+',0,MATCH($C$12,'+HR+',0)))<=$C$16,FALSE))'+
         '),1,0))'};
-      ws.getCell(r,5).value={formula:'IF($H'+r+'="","",IF('+DV('IFERROR(INDEX($H'+r+':$ZZ'+r+',MATCH($C$14,'+HR+',0)),0)')+'<='+R1TO+',"1차","2차"))'};
+      ws.getCell(r,5).value={formula:'IF($I'+r+'="","",IF('+DV('IFERROR(INDEX($I'+r+':$ZZ'+r+',MATCH($C$14,'+HR+',0)),0)')+'<='+R1TO+',"1차","2차"))'};
       // 도우미: 선정 후보(해당 차수·필수 아님)의 난수만 F/G열에 두고, 임계 난수(C18/C19) 이하이면 선정 → 행당 계산량이 모집단 크기와 무관
-      ws.getCell(r,6).value={formula:'IF(AND($H'+r+'<>"",E'+r+'="1차",D'+r+'=0),C'+r+',"")'};ws.getCell(r,7).value={formula:'IF(AND($H'+r+'<>"",E'+r+'="2차",D'+r+'=0),C'+r+',"")'};
+      ws.getCell(r,6).value={formula:'IF(AND($I'+r+'<>"",E'+r+'="1차",D'+r+'=0),C'+r+',"")'};ws.getCell(r,7).value={formula:'IF(AND($I'+r+'<>"",E'+r+'="2차",D'+r+'=0),C'+r+',"")'};
       [6,7].forEach(cc=>{const cell=ws.getCell(r,cc);cell.numFmt='0.0000';cell.font={name:'맑은 고딕',size:8,color:{argb:'FFBBBBBB'}}});
-      const selFx=(rd,hcol,tcell,col)=>'IF(OR($H'+r+'="",E'+r+'<>"'+rd+'"),"",IF(OR(D'+r+'=1,AND('+hcol+r+'<>"",'+hcol+r+'<='+tcell+')),COUNT($'+col+'$'+HDRROW+':'+col+(r-1)+')+1,""))';
-      ws.getCell(r,1).value={formula:selFx('1차','F','$C$18','A')};ws.getCell(r,2).value={formula:selFx('2차','G','$C$19','B')};
+      const selFx=(rd,hcol,tcell,col,dc)=>'IF(OR($I'+r+'="",E'+r+'<>"'+rd+'"),"",IF(IF('+dc+'>0,$H'+r+'<>"",OR(D'+r+'=1,AND('+hcol+r+'<>"",'+hcol+r+'<='+tcell+'))),COUNT($'+col+'$'+HDRROW+':'+col+(r-1)+')+1,""))';   // 직접선정(H)이 있으면 그것만
+      ws.getCell(r,1).value={formula:selFx('1차','F','$C$18','A','$F$18')};ws.getCell(r,2).value={formula:selFx('2차','G','$C$19','B','$F$19')};
+      {const hc=ws.getCell(r,8);hc.dataValidation={type:'list',allowBlank:true,showErrorMessage:false,formulae:['"V"']};hc.alignment={horizontal:'center'}}
       [1,2,3,4,5].forEach(cc=>{const cell=ws.getCell(r,cc);cell.font={name:'맑은 고딕',size:9,color:{argb:'FF48626D'}};cell.alignment={horizontal:'center'}});
     }
+    ws.addConditionalFormatting({ref:'H'+D0+':H'+END,rules:[{type:'expression',formulae:['$I'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFF9E6'}}}}]});
     ws.addConditionalFormatting({ref:'A'+D0+':ZZ'+END,rules:[{type:'expression',formulae:['$A'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFFFF2CC'}}}},{type:'expression',formulae:['$B'+D0+'<>""'],style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:'FFDDEBF7'}}}}]});
-    ws.getColumn(1).width=9;ws.getColumn(2).width=30;ws.getColumn(3).width=16;ws.getColumn(4).width=9;ws.getColumn(5).width=8;ws.getColumn(6).width=7;ws.getColumn(7).width=7;for(let cc=8;cc<=29;cc++)ws.getColumn(cc).width=14;
+    ws.getColumn(1).width=9;ws.getColumn(2).width=30;ws.getColumn(3).width=16;ws.getColumn(4).width=9;ws.getColumn(5).width=8;ws.getColumn(6).width=7;ws.getColumn(7).width=7;ws.getColumn(8).width=9;for(let cc=9;cc<=30;cc++)ws.getColumn(cc).width=14;
+    const cp=CARRY&&CARRY.pop[o.controlCode];                       // 기존 파일 모집단·직접선정·기준 옮겨 담기
+    if(cp){cp.heads.forEach((h,i)=>{const cc=ws.getCell(HDRROW,9+i);cc.value=h;styleLabel(cc);cc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE2EFDA'}}});
+      cp.rows.forEach((rw,k)=>{const r=D0+k;rw.vals.forEach((v,i)=>{if(v!=null&&v!==''){const cc=ws.getCell(r,9+i);cc.value=v;if(v instanceof Date)cc.numFmt='yyyy-mm-dd'}});if(rw.dir)ws.getCell(r,8).value=rw.dir});
+      Object.entries(cp.prm||{}).forEach(([a,v])=>{if(v!=null&&v!=='')ws.getCell(a).value=v})}
   };
-  const DV=x=>'IF(ISNUMBER('+x+'),'+x+',IFERROR(DATEVALUE(SUBSTITUTE(SUBSTITUTE('+x+',".","-"),"/","-")),IFERROR(DATE(LEFT('+x+',4),MID('+x+',5,2),MID('+x+',7,2)),0)))';   // 텍스트 날짜도 날짜로
-  const popFx=(name,i,head,col)=>{const Q="'"+name.replace(/'/g,"''")+"'";return 'IFERROR(INDEX('+Q+'!$H$'+D0+':$ZZ$'+END+',MATCH('+i+','+Q+'!$'+col+'$'+D0+':$'+col+'$'+END+',0),MATCH("'+String(head).replace(/"/g,'""')+'",'+Q+'!$H$'+HDRROW+':$ZZ$'+HDRROW+',0)),"")'};
+  const DV=x=>'IF(AND(ISNUMBER('+x+'),'+x+'>=19000101,'+x+'<=29991231),DATE(INT('+x+'/10000),MOD(INT('+x+'/100),100),MOD('+x+',100)),IF(ISNUMBER('+x+'),'+x+',IFERROR(DATEVALUE(SUBSTITUTE(SUBSTITUTE('+x+',".","-"),"/","-")),IFERROR(DATE(LEFT('+x+',4),MID('+x+',5,2),MID('+x+',7,2)),0))))';   // 텍스트 날짜도 날짜로
+  const popFx=(name,i,head,col)=>{const Q="'"+name.replace(/'/g,"''")+"'";return 'IFERROR(INDEX('+Q+'!$I$'+D0+':$ZZ$'+END+',MATCH('+i+','+Q+'!$'+col+'$'+D0+':$'+col+'$'+END+',0),MATCH("'+String(head).replace(/"/g,'""')+'",'+Q+'!$I$'+HDRROW+':$ZZ$'+HDRROW+',0)),"")'};
 
   const evNOf=c=>{if(c.auto)return 1;if(c.cls==='event')return 60;const pr=perRef[c.cls+'|'+c.lv];return Math.max(1,c.annual||1,pr&&pr.manual?pr.nrow:0)};
   const evCell={};                                  // 통제|차수 → [기간 칸 주소] (샘플요청이 통제 시트를 참조)
@@ -2728,13 +2811,14 @@ async function exportProcTOEYear(p0){
         const actRef=PQ?(is1?PQ+'!$D$9':PQ+'!$D$10'):null;
         lab(r,1,2,rd+' 표본 규모');valc(r,3,9,c.auto?(is1?'1 (설정·권한 증빙)':'1 (설정·권한 증빙 — 변경 여부 확인)'):nRef?{formula:nRef+'&"건"'+(actRef?'&IF('+actRef+'>'+nRef+'," (필수 포함으로 실제 "&'+actRef+'&"건)","")':''),result:null}:'미산정');r++;
         lab(r,1,2,rd+' 표본 선정 방법');valc(r,3,9,t.method||(c.auto?'해당없음(자동통제)':'무작위 추출'));r++;
-        lab(r,1,2,rd+' 평가 수행자 / 수행일');lab(r,3,3,'수행자');valc(r,4,5,is1?(TOE.performer||''):'');lab(r,6,6,'수행일');valc(r,7,9,is1&&TOE.performDate?new Date(TOE.performDate):'').numFmt='yyyy-mm-dd';r++;
-        lab(r,1,2,rd+' 검토자 / 검토일');lab(r,3,3,'검토자');valc(r,4,5,is1?(TOE.reviewer||''):'');lab(r,6,6,'검토일');valc(r,7,9,is1&&TOE.reviewDate?new Date(TOE.reviewDate):'').numFmt='yyyy-mm-dd';r++;
+        const CR=CARRY&&CARRY.ctrls[o.controlCode];const putPR=(row,k)=>{const v=CR&&CR.perf[rd+'|'+k];if(!v)return;if(v[0]!=null&&v[0]!=='')ws.getCell(row,4).value=v[0];if(v[1]!=null&&v[1]!=='')ws.getCell(row,7).value=v[1]};
+        lab(r,1,2,rd+' 평가 수행자 / 수행일');lab(r,3,3,'수행자');valc(r,4,5,is1?(TOE.performer||''):'');lab(r,6,6,'수행일');valc(r,7,9,is1&&TOE.performDate?new Date(TOE.performDate):'').numFmt='yyyy-mm-dd';putPR(r,'perf');r++;
+        lab(r,1,2,rd+' 검토자 / 검토일');lab(r,3,3,'검토자');valc(r,4,5,is1?(TOE.reviewer||''):'');lab(r,6,6,'검토일');valc(r,7,9,is1&&TOE.reviewDate?new Date(TOE.reviewDate):'').numFmt='yyyy-mm-dd';putPR(r,'rev');r++;
         const eh=ws.getCell(r,1);eh.value=RL('evTitle')+' ('+rd+')';styleLabel(eh);ws.mergeCells(r,1,r,9);for(let kk=1;kk<=9;kk++)ws.getCell(r,kk).border=BORDER;r++;
         lab(r,1,1,RL('evNo'));ev.forEach((cdef,i)=>lab(r,2+i,2+i,cdef.label));lab(r,tcS,tcE,RL('evText'));lab(r,9,9,RL('evResult'));r++;
-        const noCol=is1?'A':'B';
+        const noCol=is1?'A':'B';const evS=r;
         for(let i=0;i<x.evN;i++){const no=i+1;
-          if(PQ){const act=actRef;valc(r,1,1,{formula:'IF('+no+'<='+act+','+no+',"")'},{center:true});ev.forEach((cdef,j)=>{const cc=valc(r,2+j,2+j,{formula:popFx(pn,no,clean(cdef.src)||clean(cdef.label),noCol)});if(j===dateIdx)cc.numFmt='yyyy-mm-dd'});
+          if(PQ){const act=actRef;valc(r,1,1,{formula:'IF('+no+'<='+act+','+no+',"")'},{center:true});ev.forEach((cdef,j)=>{const fx0=popFx(pn,no,clean(cdef.src)||clean(cdef.label),noCol);const cc=valc(r,2+j,2+j,{formula:j===dateIdx?'IF('+fx0+'="","",'+DV(fx0)+')':fx0});if(j===dateIdx)cc.numFmt='yyyy-mm-dd'});   // 일자: 텍스트·8자리 숫자도 날짜로
             valc(r,tcS,tcE,{formula:'IF('+no+'<='+act+',"'+TXT+'","")'});valc(r,9,9,{formula:'IF('+no+'<='+act+',"예외사항 없음","")'},{dv:OPT_EV_RESULT})}
           else if(pref){const noRef=is1?pref.no1:pref.no2;valc(r,1,1,{formula:'IF('+no+'<='+nRef+','+no+',"")'},{center:true});
             ev.forEach((cdef,j)=>{const cc=valc(r,2+j,2+j,j===dateIdx?{formula:'IFERROR(INDEX('+pref.lab+',MATCH('+no+','+noRef+',0)),"")'}:'');
@@ -2742,9 +2826,12 @@ async function exportProcTOEYear(p0){
             valc(r,tcS,tcE,{formula:'IF('+no+'<='+nRef+',"'+TXT+'","")'});valc(r,9,9,{formula:'IF('+no+'<='+nRef+',"예외사항 없음","")'},{dv:OPT_EV_RESULT})}
           else{valc(r,1,1,no,{center:true});ev.forEach((cdef,j)=>valc(r,2+j,2+j,''));valc(r,tcS,tcE,c.auto?'설정/권한 화면 캡쳐로 통제 설계·운영 확인':TXT);valc(r,9,9,'예외사항 없음',{dv:OPT_EV_RESULT})}
           r++}
+        {const newCat=c.auto?'auto':c.cls==='event'?'event':'periodic';                   // 기존 파일의 직접 입력값(같은 유형일 때만)
+         if(CR&&CR.cat===newCat&&CR.ev[rd])CR.ev[rd].forEach((o2,i)=>{if(i>=x.evN)return;Object.entries(o2).forEach(([cc,v])=>{ws.getCell(evS+i,+cc).value=v;if(v instanceof Date)ws.getCell(evS+i,+cc).numFmt='yyyy-mm-dd'})})}
         const s0=r;const line=(sub,v,opts)=>{lab(r,2,2,sub);valc(r,3,9,v,opts);r++};
-        conclRows[is1?'r1':'r2']=r;line(RL('conclResult'),'',{dv:OPT_TOE_RESULT});   // 증빙 확인 후 입력 — 기본값 없음ws.getCell(r-1,3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
+        conclRows[is1?'r1':'r2']=r;line(RL('conclResult'),'',{dv:OPT_TOE_RESULT});ws.getCell(r-1,3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
         line(RL('opinion'),'확인결과 이상없음');line(RL('exception'),'');line(RL('defClass'),'해당사항 없음',{dv:OPT_DEF});line(RL('comp'),'보완통제 없음',{dv:OPT_COMP});line(RL('recur'),'해당사항 없음',{dv:OPT_RECUR});line(RL('followup'),'');
+        if(CR&&CR.concl[rd])CR.concl[rd].forEach((v,k)=>{if(v!==undefined&&v!==null)ws.getCell(s0+k,3).value=v});
         lab(s0,1,1,rd+' 결론');ws.mergeCells(s0,1,r-1,1);r++;
         return;
       }
@@ -2753,6 +2840,7 @@ async function exportProcTOEYear(p0){
         const s0=r;const line=(sub,v,opts)=>{lab(r,2,2,sub);valc(r,3,9,v,opts);r++};
         conclRows.year=r;line(RL('conclResult'),'',{dv:OPT_TOE_RESULT});ws.getCell(r-1,3).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF9E6'}};
         line(RL('opinion'),'확인결과 이상없음');line(RL('exception'),'');line(RL('defClass'),'해당사항 없음',{dv:OPT_DEF});line(RL('comp'),'보완통제 없음',{dv:OPT_COMP});line(RL('recur'),'해당사항 없음',{dv:OPT_RECUR});line(RL('followup'),'');
+        {const CR=CARRY&&CARRY.ctrls[o.controlCode];if(CR&&CR.concl.year)CR.concl.year.forEach((v,k)=>{if(v!==undefined&&v!==null)ws.getCell(s0+k,3).value=v})}
         lab(s0,1,1,RL('conclTitle'));ws.mergeCells(s0,1,r-1,1);
         return;
       }
@@ -2762,7 +2850,7 @@ async function exportProcTOEYear(p0){
     // 인덱스 행
     const ir=idx.getRow(7+oi),anc='$B'+(7+oi);
     const vals=[o.controlCode,fx(o,'controlName',o.controlName,anc),fx(o,'keyControl',o.keyControl,anc),fx(o,'frequency',o.frequency,anc),amLabel(o),c.lv,
-      c.auto?1:PQ?{formula:PQ+'!$C$8',result:c.annual}:pref?{formula:pref.nA,result:c.annual}:c.annual,t.method||(c.auto?'해당없음(자동통제)':'무작위 추출'),null,t.prog||OPT_TPROG[0],
+      c.auto?1:PQ?{formula:PQ+'!$C$8',result:c.annual}:pref?{formula:pref.nA,result:c.annual}:c.annual,t.method||(c.auto?'해당없음(자동통제)':'무작위 추출'),null,(CARRY&&CARRY.prog[o.controlCode])||t.prog||OPT_TPROG[0],
       ...['r1','r2','year'].map(k=>conclRows[k]?{formula:'IF('+qs(ws.name)+'!$C$'+conclRows[k]+'="","",'+qs(ws.name)+'!$C$'+conclRows[k]+')',result:null}:''),null];
     vals.forEach((v,kk)=>{const cell=ir.getCell(2+kk);if(kk===8){cell.value=hlink(sname(o),o.controlCode);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true};cell.border=BORDER}else if(kk===13){if(pn){cell.value=hlink(pn,pn);cell.font={name:'맑은 고딕',size:10,color:{argb:'FF0E4C5C'},underline:true}}else{cell.value=c.auto?'N/A':'주기성 샘플링';styleVal(cell)}cell.border=BORDER}else{cell.value=v;styleVal(cell)}});
     ir.getCell(11).dataValidation=dvList(OPT_TPROG);   // 결론 3열은 통제 시트에서 입력한 값을 집계(수식)
@@ -2798,7 +2886,7 @@ async function exportProcTOEYear(p0){
         for(let i=1;i<=N;i++){
           let noE;
           if(PQ){const act=is1?PQ+'!$D$9':PQ+'!$D$10';noE='IF(AND('+FLT(rd)+','+i+'<='+act+'),'+i+',"")';base(r,rd,noE);
-            ev.forEach((cdef,j)=>{const col=colOf(cdef.label);if(col==null)return;const cc=sq.getCell(r,col);cc.value={formula:'IF('+noE+'="","",'+popFx(pn,i,clean(cdef.src)||clean(cdef.label),is1?'A':'B')+')'};styleVal(cc);if(j===dateIdx)cc.numFmt='yyyy-mm-dd'})}
+            ev.forEach((cdef,j)=>{const col=colOf(cdef.label);if(col==null)return;const cc=sq.getCell(r,col);const fx0=popFx(pn,i,clean(cdef.src)||clean(cdef.label),is1?'A':'B');cc.value={formula:'IF('+noE+'="","",'+(j===dateIdx?'IF('+fx0+'="","",'+DV(fx0)+')':fx0)+')'};styleVal(cc);if(j===dateIdx)cc.numFmt='yyyy-mm-dd'})}
           else if(pref&&ecs[i-1]){const er=ecs[i-1];noE='IF(AND('+FLT(rd)+','+er+'<>""),'+i+',"")';base(r,rd,noE);     // 통제 시트 기간 칸(공통 샘플 또는 통제별 선택)
             const cdef=ev[dateIdx]||ev[0];const col=cdef?colOf(cdef.label):8;if(col!=null){const cc=sq.getCell(r,col);cc.value={formula:'IF('+noE+'="","",'+er+')'};styleVal(cc)}}
           else if(pref){noE='""';base(r,rd,noE)}
