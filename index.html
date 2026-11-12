@@ -126,7 +126,7 @@
     <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
     <button class="ghost" id="loadProjTop">불러오기</button>
     <span class="samp" id="saveStat" style="max-width:none"></span>
-    <div class="stage">v4.7</div>
+    <div class="stage">v4.8</div>
   </div>
 </header>
 
@@ -361,12 +361,12 @@
 /* ══════════ 필드 정의 ══════════ */
 const FIELDS = [
  {g:'필수', key:'processCode', label:'프로세스 코드', hint:'파일 분리 기준 · 시트 최상단',
-  pos:[[/^mega(process)?(code|no|번호|코드)$|^(대|메가)(분류|프로세스)(코드|번호)$/,14],[/프로세스(번호|코드|no|code|id)/,12],[/process(no|code|id|#)/,9],[/^프로세스$/,4],[/mega|대분류|cycle/,2]],
+  pos:[[/^mega(process)?(code|no|번호|코드)$|^(대|메가)(분류|프로세스)(코드|번호)$/,14],[/프로세스(번호|코드|no|code|id)/,12],[/process(no|code|id|#)/,9],[/^cycle(code|코드|번호|no)$/,24],[/^프로세스$/,4],[/mega|대분류|cycle/,2]],
   neg:[[/하위|sub/,7],[/명칭|이름|name|설명|text/,14]],
   val:v=>/^[A-Za-z가-힣]{1,12}[0-9]{0,3}$/.test(v)?3:0},
  {g:'필수', key:'controlCode', label:'통제활동 코드', hint:'시트명 · Link 기준',
   pos:[[/통제활동key|통제key|controlkey|^key$|통제활동(번호|코드|id)|통제(번호|코드|id)/,15],[/통제(활동)?(번호|코드|no|code|id)/,14],[/control(activity)?(no|code|id)/,10]],
-  neg:[[/명칭|이름|name|설명|기술|목적|description/,14],[/리스크|risk|wcgw/,9]],
+  neg:[[/명칭|이름|name|설명|기술|목적|description/,14],[/리스크|risk|wcgw/,9],[/관련|보완|참조|연계|related/,14]],
   val:v=>/[A-Za-z]/.test(v)&&/[0-9]/.test(v)&&v.length<=30?3:0},
  {g:'필수', key:'controlName', label:'통제활동명',
   pos:[[/통제활동(제목|명|명칭|이름|title)|통제(제목|명칭)/,16],[/통제(활동)?(명칭|명$|이름|name)/,14],[/control(activity)?name/,10]],
@@ -377,11 +377,11 @@ const FIELDS = [
   neg:[[/근거|비핵심|non.?key|reason|사유/,16]],
   val:v=>/^(y|n|yes|no|예|아니오|key|nonkey|non-key|비핵심|핵심)$/i.test(v)?4:0},
  {g:'필수', key:'frequency', label:'통제주기',
-  pos:[[/통제주기/,16],[/수행빈도|통제빈도/,14],[/주기|빈도|frequency/,9],[/일별.*월별|월별.*분기별/,12]],
-  neg:[[/수행빈도.*low|리스크/,10]],
+  pos:[[/통제주기|통제수행주기|^수행주기$/,16],[/수행빈도|통제빈도/,14],[/주기|빈도|frequency/,9],[/일별.*월별|월별.*분기별/,12]],
+  neg:[[/수행빈도.*low|리스크/,10],[/^\(?\d+\)|↑|유형|위험평가|고려/,12]],
   val:v=>/일별|주별|월별|분기|반기|연간|연별|건별|상시|daily|monthly|quarterly|annual|event/i.test(v)?5:0},
  {g:'필수', key:'controlRisk', label:'최종 통제위험', hint:'예: RoMM 평가',
-  pos:[[/romm/,16],[/통제위험/,10],[/최종.?(통제)?위험/,10],[/control.?risk/,9],[/평가|레벨|rating|level/,2]],
+  pos:[[/romm/,16],[/통제위험/,10],[/residual|통제실패위험|잔여위험|잔존위험/,12],[/최종.?(통제)?위험/,10],[/control.?risk/,9],[/평가|레벨|rating|level/,2]],
   neg:[[/고유|inherent|wcgw|발생가능성|영향도|likelihood|impact/,16],[/사유|근거/,8]],
   val:v=>/^(h|m|l|high|medium|low|상|중|하)$/i.test(v)?4:0},
  {g:'필수', key:'controlType', label:'통제유형(예방/적발)',
@@ -393,13 +393,13 @@ const FIELDS = [
   neg:[[/번호|no$|코드|code/,14],[/레벨|level|평가|발생가능성|영향도|rating/,13]],
   val:v=>v.length>15?4:0},
  {g:'필수', key:'controlDesc', label:'통제활동 기술',
-  pos:[[/통제활동(상세|상세내용|설명|기술|내용)|통제(상세|기술)/,16],[/통제활동(설명|기술|내용)/,16],[/통제(설명|기술서)/,12],[/when.*who.*what/,10],[/control.?(description|activity)/,9],[/^통제활동$/,8]],
+  pos:[[/통제활동(상세|상세내용|설명|기술|내용|description)|통제(상세|기술)/,16],[/통제활동(설명|기술|내용)/,16],[/통제(설명|기술서)/,12],[/when.*who.*what/,10],[/control.?(description|activity)/,9],[/^통제활동$/,8]],
   neg:[[/명칭|번호|코드|목적|id/,14]], val:v=>v.length>60?4:0},
  {g:'필수', key:'testProc', label:'통제 테스트 절차',
   pos:[[/테스트절차/,16],[/test.?procedure/,11],[/(수행|평가)절차/,7]],
   neg:[[/결과|result/,12],[/방법|샘플|sample|질문|관찰|재수행/,7]], val:v=>v.length>60?4:0},
  {g:'필수', key:'controlDept', label:'통제부서',
-  pos:[[/통제수행조직/,16],[/(통제|수행|담당)(부서|조직|팀)/,12],[/department|owner.?dept/,8]],
+  pos:[[/통제수행조직/,16],[/^부서$/,10],[/^본부$/,8],[/(통제|수행|담당)(부서|조직|팀)/,12],[/department|owner.?dept/,8]],
   neg:[[/담당자|책임자|성명|person|수행자/,14]], val:v=>v.length<=30?2:0},
  {g:'필수', key:'controlOwner', label:'통제책임자',
   pos:[[/통제수행담당자/,16],[/통제(책임자|담당자)/,14],[/(담당자|책임자|수행자)/,8],[/control.?owner/,9]],
@@ -409,14 +409,14 @@ const FIELDS = [
   neg:[[/완전성|completeness/,16],[/샘플|sample/,9]], val:v=>v.length<=80?2:0},
  {g:'필수', key:'popComplete', label:'모집단 완전성 확인', derive:'testProc',
   hint:'전용 열이 없으면 테스트 절차의 [1] 항목에서 추출',
-  pos:[[/모집단완전성/,18],[/완전성(확인|검증|절차)/,14],[/completeness/,8]],
+  pos:[[/모집단의?완전성/,18],[/완전성(확인|검증|절차)/,14],[/completeness/,8]],
   neg:[[/경영자주장|assertion|실재성|권리와의무|발생사실|표시와공시|측정/,20],[/샘플|sample/,8]],
   val:v=>v.length>10?2:0, defLabel:'모집단 완전성 확인 절차'},
  {g:'필수', key:'relatedDoc', label:'관련문서(증빙)',
   pos:[[/테스트(점검)?(문서|증빙|샘플)|점검문서/,15],[/관련(문서|증빙|서류|자료)/,16],[/테스트(샘플|증빙|문서)|샘플\(문서\)/,14],[/증빙(명|자료)?/,10],[/evidence|related.?doc|^document$/,9]],
   neg:[[/ipe/,18],[/해당여부|번호|no$/,8]], val:v=>v.length<=120?2:0},
  {g:'참고', key:'processName', label:'프로세스명', opt:true, hint:'파일명에만 사용',
-  pos:[[/^megaprocess$|^mega$|^(대|메가)(분류|프로세스)(명|이름)?$/,13],[/프로세스(명|이름|name|text)/,14],[/process(text|name|명)/,12],[/mega|대분류/,3]],
+  pos:[[/^megaprocess$|^mega$|^(대|메가)(분류|프로세스)(명|이름)?$/,13],[/프로세스(명|이름|name|text)/,14],[/process(text|name|명)/,12],[/^cycle(명칭|명|이름|name)$/,20],[/mega|대분류/,3]],
   neg:[[/하위|sub/,8],[/번호|코드|code|no$|#/,14]], val:v=>v.length<=30?2:0},
  {g:'참고', key:'autoManual', label:'자동/수동 구분', opt:true, hint:'요청증빙 판정에 사용 · 없으면 통제기술 키워드로 추정',
   pos:[[/자동.?수동|수동.?자동|manual.?auto|auto.?manual/,16],[/자동화(여부|수준|구분)|automation/,13],[/통제(구분|방식|형태|성격)/,7]],
@@ -427,16 +427,16 @@ const FIELDS = [
  {g:'참고', key:'autoType', label:'자동통제 유형', opt:true, hint:'값이 있으면 자동통제 (수동 열이 비어 있을 때)',
   pos:[[/^자동통제(유형)?$|^자동$|auto(mated)?(control)?(type)?$/,14],[/통제유형|controltype/,4]], neg:[[/수동|manual|구분|자동화(여부|수준)/,12]]},
  /* ── 운영평가(TOE) 양식용 항목 — RCM에 없으면 사용 해제하면 해당 행이 빠집니다 ── */
- {g:'운영평가', key:'cycleCode', label:'상위 프로세스 코드 (Cycle)', opt:true, pos:[[/^cycle#?$|cycle(번호|코드|no)|사이클(코드|번호|#)/,13]], neg:[[/process|프로세스|sub/,12]], val:v=>/^[A-Z]{1,4}\d{0,2}$/.test(v)?4:0},
- {g:'운영평가', key:'cycleName', label:'상위 프로세스명 (Cycle)', opt:true, pos:[[/^cycle$|^사이클(명)?$/,12]], neg:[[/#|번호|코드|no$|process|sub/,12]], val:v=>v.length<=20?2:0},
- {g:'운영평가', key:'subProcessCode', label:'하위 프로세스 코드', opt:true, pos:[[/^major(process)?(code|no|번호|코드)$|^(중|소)분류(코드|번호)$/,14],[/subprocess#|subprocess(코드|번호|no)|하위프로세스(코드|번호)/,13]], neg:[[/위험|risk|명$/,10]]},
+ {g:'운영평가', key:'cycleCode', label:'상위 프로세스 코드 (Cycle)', opt:true, pos:[[/^cycle#?$|cycle(번호|코드|no|code)|사이클(코드|번호|#)/,13]], neg:[[/process|프로세스|sub/,12]], val:v=>/^[A-Z]{1,4}\d{0,2}$/.test(v)?4:0},
+ {g:'운영평가', key:'cycleName', label:'상위 프로세스명 (Cycle)', opt:true, pos:[[/^cycle$|^cycle(명칭|명|name)$|^사이클(명)?$/,12]], neg:[[/#|번호|코드|no$|process|sub/,12]], val:v=>v.length<=20?2:0},
+ {g:'운영평가', key:'subProcessCode', label:'하위 프로세스 코드', opt:true, pos:[[/^major(process)?(code|no|번호|코드)$|^(중|소)분류(코드|번호)$/,14],[/subprocess#|subprocess(코드|번호|no|code)|하위프로세스(코드|번호)/,13]], neg:[[/위험|risk|명$/,10]]},
  {g:'운영평가', key:'subProcessName', label:'하위 프로세스명', opt:true, pos:[[/하위프로세스(명|이름|명칭)/,13],[/^majorprocess$|^major$|^(중|소)분류(명)?$/,13],[/^subprocess$|subprocess(text|name|명)|하위프로세스(명|text)?$/,12]], neg:[[/#|코드|번호|no$|위험|risk/,12]], val:v=>v.length<=30?2:0},
  {g:'운영평가', key:'irLevel', label:'고유위험 수준 (IR)', opt:true, pos:[[/고유리스크|고유위험|통제이전|inherent/,10],[/리스크레벨|위험수준|위험등급|risklevel|^level/,8],[/subprocess위험수준|고유위험|ir:|inherent/,13]], neg:[[/통제위험|controlrisk|통제후|잔여/,14],[/기술|설명|사유|평가요소/,10]], val:v=>/^(high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
- {g:'운영평가', key:'rtFR', label:'위험유형 — 재무보고 신뢰성', opt:true, pos:[[/재무보고신뢰성/,13],[/통제목적|controlobjective/,4]]},
- {g:'운영평가', key:'rtAsset', label:'위험유형 — 자산보호', opt:true, pos:[[/자산보호/,13],[/통제목적|controlobjective/,4]]},
+ {g:'운영평가', key:'rtFR', label:'위험유형 — 재무보고 신뢰성', opt:true, pos:[[/재무보고의?신뢰성/,13],[/통제목적|controlobjective/,4]]},
+ {g:'운영평가', key:'rtAsset', label:'위험유형 — 자산보호', opt:true, pos:[[/자산의?보호/,13],[/통제목적|controlobjective/,4]]},
  {g:'운영평가', key:'rtFraud', label:'위험유형 — 부정방지', opt:true, pos:[[/부정방지/,13],[/통제목적|controlobjective/,4]]},
- {g:'운영평가', key:'riskCode', label:'Risk 코드', opt:true, pos:[[/^(리스크|위험|risk)(\(wcgw\))?(no\.?|번호|코드|#)$|wcgw\)?(no|번호)/,14],[/prpkey|^prp(코드|번호|id|no)$|riskkey/,15],[/통제위험번호|risk(코드|번호|#|id|no)|위험(코드|번호|id)/,13]], neg:[[/설명|기술|내용|명칭|수준/,12]], val:v=>/R\d{1,3}/.test(v)?4:0},
- {g:'운영평가', key:'crLevel', label:'통제위험 수준', opt:true, pos:[[/^통제위험(평가)?$|controlrisk(assessment)?$/,13],[/리스크레벨|위험수준|위험등급|risklevel|^level/,8],[/^통제위험(위험)?(수준|등급)$|controlrisk(level|grade)/,13],[/^통제위험수준$|controlrisklevel/,13]], neg:[[/고유|inherent|통제이전/,14],[/기술|설명|전반|romm|최종/,12]], val:v=>/^(higher|moderate|lower|high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
+ {g:'운영평가', key:'riskCode', label:'Risk 코드', opt:true, pos:[[/^(리스크|위험|risk)(\(wcgw\))?(no\.?|번호|코드|#)$|wcgw\)?(no|번호)/,14],[/prpkey|^prp(코드|번호|id|no)$|riskkey/,15],[/통제위험번호|risk(코드|번호|#|id|no)|위험(코드|번호|id)/,13],[/(위험|risk|리스크).*code$/,12]], neg:[[/설명|기술|내용|명칭|수준/,12]], val:v=>/R\d{1,3}/.test(v)?4:0},
+ {g:'운영평가', key:'crLevel', label:'통제위험 수준', opt:true, pos:[[/^통제위험(평가)?$|controlrisk(assessment)?$/,13],[/리스크레벨|위험수준|위험등급|risklevel|^level/,8],[/^통제위험(위험)?(수준|등급)$|controlrisk(level|grade)/,13],[/^통제위험수준$|controlrisklevel/,13],[/residual|통제실패위험|잔여위험|잔존위험/,13]], neg:[[/고유|inherent|통제이전/,14],[/기술|설명|전반|romm|최종/,12],[/^\(?\d+\)|↑|likelihood|impact|발생가능성|영향도/,12]], val:v=>/^(higher|moderate|lower|high|medium|low|h|m|l|상|중|하)$/i.test(v)?4:0},
  {g:'운영평가', key:'crDesc', label:'통제위험 수준 기술', opt:true, pos:[[/통제위험수준(기술|설명|서술)/,13]], neg:[[/전반/,10]], val:v=>v.length>20?3:0},
  {g:'운영평가', key:'account', label:'관련 계정과목', opt:true, pos:[[/^계정과목(명)?$|관련계정(과목)?(명)?/,13],[/관련계정(과목)?|^계정과목$|account/,12]], neg:[[/코드|code/,6]]},
  {g:'운영평가', key:'asE', label:'경영자주장 — 실재성(E)', opt:true, pos:[[/실재성|existence/,12],[/주장|assertion/,5]]},
@@ -446,7 +446,7 @@ const FIELDS = [
  {g:'운영평가', key:'asP', label:'경영자주장 — 표시와 공시(P)', opt:true, pos:[[/표시와?공시|presentation|disclosure/,12],[/주장|assertion/,5]]},
  {g:'운영평가', key:'asO', label:'경영자주장 — 발생사실(O)', opt:true, pos:[[/발생사실|occurrence/,12],[/주장|assertion/,5]]},
  {g:'운영평가', key:'asM', label:'경영자주장 — 측정(M)', opt:true, pos:[[/^측정$|measurement|accuracy|정확성|측정과배분/,12],[/주장|assertion/,5]]},
- {g:'운영평가', key:'system', label:'System', opt:true, pos:[[/it시스템|연관(it)?시스템|시스템명|관련it|응용프로그램|application/,12],[/^system$|^시스템$|사용시스템|관련시스템/,12]], neg:[[/자동|권한|접근|설정/,8]], val:v=>v.length<=30?2:0},
+ {g:'운영평가', key:'system', label:'System', opt:true, pos:[[/in.?scope.?system|it시스템|연관(it)?시스템|시스템명|관련it|응용프로그램|application/,12],[/^system$|^시스템$|사용시스템|관련시스템/,12]], neg:[[/자동|권한|접근|설정/,8]], val:v=>v.length<=30?2:0},
  {g:'운영평가', key:'ipe', label:'IPE (Y/N)', opt:true, pos:[[/^ipe(y\/n|여부)$/,14],[/^ipe$|ipe(여부|해당|y\/n)|informationproduced/,13]], neg:[[/문서|자료|보고서|리스트/,14],[/type|유형|내용|기술/,12]], val:v=>/^(y|n|yes|no|해당|비해당)$/i.test(v)?4:0},
  {g:'운영평가', key:'ipeType', label:'IPE Type / 명', opt:true, pos:[[/ipe(해당)?(문서|자료|보고서|리스트)|^ipe$/,12],[/ipetype|ipe(유형|종류|명|name)/,13]]},
  {g:'운영평가', key:'mrc', label:'MRC (Y/N)', opt:true, pos:[[/^mrc$|mrc(여부|해당|y\/n)|managementreview/,13]], neg:[[/내용|기술|설명|type/,12]], val:v=>/^(y|n|yes|no)$/i.test(v)?4:0},
@@ -460,7 +460,7 @@ const FIELDS = [
  {g:'운영평가', key:'tmI', label:'테스트방법 — 질문(I)', opt:true, pos:[[/^질문|inquiry/,12],[/테스트방법|testmethod|테스트기법/,5]]},
  {g:'운영평가', key:'popCount', label:'모집단의 수', opt:true, pos:[[/모집단(의)?(수|개수|건수|count)$|population(size|count)/,13]], neg:[[/샘플|sample|정의|완전성/,12]]},
  {g:'운영평가', key:'sampleSize', label:'테스트 범위 (Sample Size)', opt:true, pos:[[/samplesize|테스트범위|샘플(수|사이즈|규모)|표본(수|규모)/,13]], neg:[[/guide|가이드/,6]]},
- {g:'운영평가', key:'rulePolicy', label:'Rule & policy', opt:true, pos:[[/rule|규정|정책|policy/,11]], neg:[[/위험|risk|통제활동/,8]]},
+ {g:'운영평가', key:'rulePolicy', label:'Rule & policy', opt:true, pos:[[/rule|규정|정책|policy/,11],[/관련(정책|규정)|^정책$|^규정$/,13]], neg:[[/위험|risk|통제활동/,8],[/준수|법규/,8]]},
  {g:'운영평가', key:'reviewer', label:'통제활동책임자 (Reviewer)', opt:true, pos:[[/(통제)?(수행)?책임자|승인자|approver/,11],[/reviewer/,14],[/통제활동책임자|검토자/,9]], neg:[[/담당자|preparer/,12],[/preparer|수행담당자/,12]]},
 ];
 const RCM_KEYS=FIELDS.map(f=>f.key);
@@ -549,16 +549,17 @@ const EV_TYPES=[['doc','수동(문서·조회)'],['auth','권한형(자동)'],['
 const evLabel=k=>(EV_TYPES.find(x=>x[0]===k)||[,k])[1];
 const kws=str=>String(str||'').split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
 const hasKw=(txt,list)=>{const t=String(txt||'').toLowerCase();return kws(list).some(k=>t.includes(k.toLowerCase()))};
+const blankish=v=>/^[-–—_.·\s]*$|^(n\/?a|해당\s*없음|없음|x)$/i.test(clean(v));   // '-' 같은 자리표시 값
 const typeSplit=()=>MAP.manualType!=null||MAP.autoType!=null;          // 통제유형이 수동/자동 두 열로 나뉜 RCM
 function isAuto(o){
   const am=clean(o.autoManual||'');
-  if(am){ if(/수동|manual|의존|itdm|dependent/i.test(am))return false; if(/자동|auto|system/i.test(am))return true; }
-  if(typeSplit()){const m=clean(o.manualType||''),a=clean(o.autoType||'');if(m||a)return !m&&!!a}   // 수동 열에 값이 있으면 수동
+  if(am&&!blankish(am)){ if(/수동|수기|manual|의존|itdm|dependent/i.test(am))return false; if(/자동|전산|auto|system/i.test(am))return true; }
+  if(typeSplit()){const m=blankish(o.manualType)?'':clean(o.manualType),a=blankish(o.autoType)?'':clean(o.autoType);if(m||a)return !m&&!!a}   // '-'·N/A는 빈칸으로   // 수동 열에 값이 있으면 수동
   return hasKw(o.controlDesc+' '+o.controlName,REQ.kwAuto)&&!/수동으로/.test(o.controlDesc||'');
 }
 function amLabel(o){                                                   // 자동/수동 표시 문구
-  const am=clean(o.autoManual||'');if(am)return am;
-  if(typeSplit()){const m=clean(o.manualType||''),a=clean(o.autoType||'');if(m||a)return (isAuto(o)?'자동통제':'수동통제')+' — '+(isAuto(o)?a:m)}
+  const am=clean(o.autoManual||'');if(am&&!blankish(am))return am;
+  if(typeSplit()){const m=blankish(o.manualType)?'':clean(o.manualType),a=blankish(o.autoType)?'':clean(o.autoType);if(m||a)return (isAuto(o)?'자동통제':'수동통제')+' — '+(isAuto(o)?a:m)}
   return isAuto(o)?'자동(추정)':'수동(추정)';
 }
 const isPeriodic=o=>hasKw(shortFreq(o.frequency||''),REQ.skipFreq);
@@ -621,7 +622,7 @@ let OUT_MODE='tod';
 let FILEMETA={company:'',period:'',ver:'',pattern:DEF_PATTERN};
 const used=k=>USE[k]!==false;
 const PLACES=[['ctrl','통제 시트 기본정보 행'],['idx','설계평가 인덱스 열'],['none','RCM 시트에만']];
-const ALIAS={cycleCode:'processCode',cycleName:'processName',overallLevel:'controlRisk'};   // 운영평가 항목에 별도 열이 없으면 설계평가 항목 열을 함께 사용
+const ALIAS={cycleCode:'processCode',cycleName:'processName',overallLevel:'controlRisk',crLevel:'controlRisk'};   // 운영평가 항목에 별도 열이 없으면 설계평가 항목 열을 함께 사용
 const extrasAt=place=>EXTRA.filter(x=>x.place===place&&MAP[x.key]!=null&&used(x.key));
 const xLabel=x=>{const f=FIELDS.find(v=>v.key===x.key);return f?labelOf(f):(x.label||'추가 항목')};
 function syncExtraFields(){
@@ -698,12 +699,20 @@ function readFile(f){
         (PROCS.length?' · 작성중인 내용이 있습니다. 매핑 확인 후 <b>RCM 반영</b>을 누르면 증빙과 수정문구가 유지됩니다.':'')+'</div>';
       const sel=document.getElementById('sheet');sel.innerHTML='';
       WB.SheetNames.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o)});
-      sel.value=WB.SheetNames.find(n=>/rcm|통제|control/i.test(n))||WB.SheetNames[0];
+      sel.value=pickSheet();
       document.getElementById('sheetcard').classList.remove('hidden');
       loadSheet();
     }catch(err){msg.innerHTML='<div class="msg err">파일을 열지 못했습니다: '+esc(err.message)+'</div>'}
   };
   r.readAsArrayBuffer(f);
+}
+function pickSheet(){                         // RCM 시트 자동 선택: 이름에 RCM·통제가 들어간 시트 중 가장 큰 시트(간지·요약 시트 제외)
+  const area=n=>{const ws=WB.Sheets[n];if(!ws)return 0;let k=0;for(const x in ws)if(x[0]!=='!')k++;return k};   // 값이 든 셀 수
+  const named=WB.SheetNames.filter(n=>/rcm|통제|control/i.test(n)),pool=named.length?named:WB.SheetNames;
+  let best=pool[0],ba=-1;pool.forEach(n=>{const a=area(n);if(a>ba){ba=a;best=n}});
+  const all=Math.max(...WB.SheetNames.map(area));
+  if(ba<all*0.15){WB.SheetNames.forEach(n=>{const a=area(n);if(a>ba){ba=a;best=n}})}
+  return best||WB.SheetNames[0];
 }
 function loadSheet(){
   SHEET_NAME=document.getElementById('sheet').value;
@@ -736,17 +745,17 @@ function autoDetectRows(){
   for(let r=0;r<Math.min(GRID.length,25);r++){const s=headerScore(r);sc.push(s);if(s>bs)bs=s}
   HDR=sc.findIndex(s=>s>=bs*0.93); if(HDR<0)HDR=0;
   {const useBak=Object.assign({},USE);let best=null;                // 점수 상위 행들을 실제로 매핑해 보고 필수 항목이 가장 많이 잡히는 행을 헤더로
-   sc.forEach((v,r)=>{if(v<bs*0.5)return;HDR=r;DSTART=r+1;DEND=Math.min(GRID.length-1,r+30);USE=Object.assign({},useBak);buildMapping(true,true);
-     const n=FIELDS.filter(f=>f.g==='필수'&&MAP[f.key]!=null).length*3+FIELDS.filter(f=>MAP[f.key]!=null).length;if(!best||n>best.n)best={r,n}});
+   sc.forEach((v,r)=>{if(v<bs*0.3)return;HDR=r;DSTART=r+1;DEND=Math.min(GRID.length-1,r+30);USE=Object.assign({},useBak);buildMapping(true,true);
+     const n=FIELDS.filter(f=>f.g==='필수'&&MAP[f.key]!=null).length*3+FIELDS.filter(f=>MAP[f.key]!=null).length;if(!best||n>best.n||(n===best.n&&v>best.v))best={r,n,v}});   // 동점이면 헤더 점수가 높은 행
    USE=useBak;if(best)HDR=best.r}
   DSTART=HDR+1; DEND=Math.min(GRID.length-1,HDR+30);
   buildMapping(true,true);
   const cols=FIELDS.map(f=>MAP[f.key]).filter(v=>v!=null);
   DSTART=HDR+1;
   const kc=MAP.controlCode;let found=false;
-  if(kc!=null){for(let r=HDR+1;r<Math.min(GRID.length,HDR+40);r++){if(clean(GRID[r][kc])!==''&&!/^(통제|control|key|코드|code|id|no|번호)/i.test(norm(clean(GRID[r][kc])))){DSTART=r;found=true;break}}}   // 통제코드 열에 값이 처음 나오는 행(세부 제목 행 제외)
+  if(kc!=null){for(let r=HDR+1;r<Math.min(GRID.length,HDR+40);r++){if(clean(GRID[r][kc])!==''&&!blankish(GRID[r][kc])&&!/^(통제|control|key|코드|code|id|no|번호)/i.test(norm(clean(GRID[r][kc])))){DSTART=r;found=true;break}}}   // 통제코드 열에 값이 처음 나오는 행(세부 제목 행 제외)
   if(!found)for(let r=HDR+1;r<Math.min(GRID.length,HDR+40);r++){
-    const hit=cols.filter(c=>clean(GRID[r][c])!=='').length;
+    const hit=cols.filter(c=>clean(GRID[r][c])!==''&&!blankish(GRID[r][c])).length;
     if(cols.length&&hit>=Math.max(3,cols.length*0.5)){DSTART=r;break}
   }
   if(DSTART>HDR+1)buildMapping(true,true);          // 헤더행과 데이터 사이에 세부 제목 행이 있으면 그걸 반영해 다시 매핑
@@ -772,6 +781,7 @@ function headText(c){                      // 헤더 밴드(헤더행 위 3행 ~
   let leaf='',leafRow=HDR;
   for(const r of order){const t=txt(r);if(t&&!isGroup(r,t)){leaf=t;leafRow=r;break}}
   if(!leaf)for(const r of order){const t=txt(r);if(t){leaf=t;leafRow=r;break}}
+  if(leaf&&own(leafRow)===''){let r=leafRow;while(r>0&&own(r)===''&&clean((FILLED[r-1]||[])[c])===leaf)r--;if(own(r)===leaf)leafRow=r}   // 세로 병합 → 글자가 있는 원점 행
   const parents=[];for(let r=lo;r<=hi;r++){const t=txt(r);if(t&&t!==leaf&&!parents.includes(t))parents.push(t)}
   const raw=String((GRID[leafRow]||[])[c]!=null?GRID[leafRow][c]:(FILLED[leafRow]||[])[c]||'');
   return {leaf,leafRow,raw,parents};
@@ -788,6 +798,7 @@ let LABEL_MODE='rcm';   // 'rcm' = RCM 열 이름, 'default' = 툴 기본 항목
 const labelOf=f=>LABEL[f.key]!==undefined?LABEL[f.key]:(LABEL_MODE==='default'?(f.defLabel||f.label):autoLabel(f));
 const L=k=>labelOf(FIELDS.find(f=>f.key===k));
 function sampleVals(c,n){const o=[];for(let r=DSTART;r<=DEND&&o.length<n;r++){const v=clean(GRID[r][c]);if(v)o.push(v)}return o}
+const GENERIC_LEAF=/^(code|코드|no\.?|번호|명칭|명|이름|name|id|key|#|rating.*|등급|위험등급|level|레벨|수준|목적|위험명|내용|여부|해당여부)$/;
 function scoreField(f,c){
   const h=headText(c),leaf=norm(h.leaf),pars=h.parents.map(norm).filter(Boolean);
   if(!leaf&&!pars.length)return -99;
@@ -795,6 +806,9 @@ function scoreField(f,c){
   const inPar=re=>pars.some(x=>re.test(x));                                  // 상위 그룹은 개별로 검사(앞뒤 고정 패턴도 맞도록)
   (f.pos||[]).forEach(([re,w])=>{if(re.test(leaf))s+=w;else if(inPar(re))s+=w*0.6});
   (f.neg||[]).forEach(([re,w])=>{if(re.test(leaf))s-=w;else if(inPar(re))s-=w*0.35});
+  if(GENERIC_LEAF.test(leaf)&&pars.length){                                   // 「통제 › Code」「Cycle › 명칭」 같은 2단 헤더 → 그룹+제목을 붙여서도 검사
+    let best=-99;pars.forEach(p=>{const t=p+leaf;let v=0;(f.pos||[]).forEach(([re,w])=>{if(re.test(t))v+=w});(f.neg||[]).forEach(([re,w])=>{if(re.test(t))v-=w});if(v>best)best=v});
+    if(best>s)s=best}
   if(s<=0)return s;
   if(f.val){const sv=sampleVals(c,12);if(sv.length){let v=0;sv.forEach(x=>v+=f.val(x));s+=v/sv.length}else s-=3}
   return s;
@@ -810,6 +824,7 @@ function buildMapping(reset,quiet){
     EXTRA.forEach(x=>{if(keepX[x.key]!=null&&keepX[x.key]<NCOL){MAP[x.key]=keepX[x.key];MAP['_s_'+x.key]=99}});
     FIELDS.forEach(f=>{if(MAP[f.key]==null)MAP[f.key]=null});
     Object.entries(ALIAS).forEach(([k,a])=>{if(MAP[k]==null&&MAP[a]!=null){MAP[k]=MAP[a];MAP['_s_'+k]=MAP['_s_'+a]||9;if(USE[k]===false)delete USE[k]}});
+    if(MAP.autoManual==null&&MAP.controlType!=null&&sampleVals(MAP.controlType,30).some(v=>/수기|전산|수동|자동|manual|auto/i.test(v))){MAP.autoManual=MAP.controlType;MAP['_s_autoManual']=9}   // 「예방통제/수기통제」처럼 한 열에 같이 적은 RCM
     FIELDS.forEach(f=>{if(f.g==='운영평가'&&USE[f.key]===undefined&&MAP[f.key]==null)USE[f.key]=false});
   }
   if(quiet)return;
@@ -893,6 +908,7 @@ document.getElementById('loadMap').onchange=e=>{
   r.readAsText(f);
 };
 function applyMapping(m){
+  if(m.sheet&&WB&&WB.SheetNames.includes(m.sheet)&&m.sheet!==SHEET_NAME){document.getElementById('sheet').value=m.sheet;loadSheet()}   // 저장 당시 시트로 전환
   if(m.headerRow)HDR=m.headerRow-1;if(m.dataStart)DSTART=m.dataStart-1;if(m.dataEnd)DEND=m.dataEnd-1;
   if(m.templates)TMPL=Object.assign({},DEF_TMPL,m.templates);
   if(m.optProg&&m.optProg.length)OPT_PROG=m.optProg;
@@ -902,7 +918,10 @@ function applyMapping(m){
   if(m.labelMode){LABEL_MODE=m.labelMode;document.getElementById('labelMode').value=LABEL_MODE}
   syncExtraFields();
   FIELDS.forEach(fd=>{const s=m.fields&&m.fields[fd.key];if(!s){MAP[fd.key]=null;return}
-    let c=null;for(let i=0;i<NCOL;i++)if(norm(headText(i).leaf)===norm(s.header)){c=i;break}
+    const hn=norm(s.header);let c=null;                                  // 저장된 열의 제목이 같으면 그 열, 아니면 같은 제목 열(여러 개면 저장 위치에 가장 가까운 열)
+    if(s.col!=null&&s.col<NCOL&&(!hn||norm(headText(s.col).leaf)===hn))c=s.col;
+    else if(hn){const hits=[];for(let i=0;i<NCOL;i++)if(norm(headText(i).leaf)===hn)hits.push(i);
+      if(hits.length)c=hits.reduce((a,b)=>Math.abs(b-(s.col||0))<Math.abs(a-(s.col||0))?b:a)}
     MAP[fd.key]=c!=null?c:(s.col!=null&&s.col<NCOL?s.col:null);MAP['_s_'+fd.key]=99;
     if(s.label)LABEL[fd.key]=s.label});
   syncRowInputs();
@@ -1929,7 +1948,10 @@ async function fixXlsx(buf){
     for(const name of Object.keys(zip.files)){
       if(!/^xl\/worksheets\/sheet\d+\.xml$/.test(name))continue;
       let xml=await zip.file(name).async('string');
-      const n0=xml.length;xml=xml.replace(/<v>(?:NaN|-?Infinity)<\/v>/g,'');if(xml.length!==n0){changed++;zip.file(name,xml)}   // 원본 수식의 캐시값이 NaN으로 읽힌 셀 → Excel이 '셀 정보' 손상으로 봄
+      const n0=xml.length;xml=xml.replace(/<v>(?:NaN|-?Infinity)<\/v>/g,'')
+        .replace(/<conditionalFormatting\b[^>]*\/>/g,'').replace(/<conditionalFormatting\b[^>]*>\s*<\/conditionalFormatting>/g,'')   // 규칙이 빠진 빈 조건부서식(ExcelJS 미지원 유형) → Excel이 시트 전체를 '복구'하며 서식이 날아감
+        .replace(/<cfRule\b[^>]*type="(?:duplicateValues|uniqueValues)"[^>]*\/>/g,'');
+      if(xml.length!==n0){changed++;zip.file(name,xml)}   // 원본 수식의 캐시값이 NaN으로 읽힌 셀 → Excel이 '셀 정보' 손상으로 봄
       const m=xml.match(/<dataValidations[^>]*>([\s\S]*?)<\/dataValidations>/);if(!m)continue;
       const items=[...m[1].matchAll(/<dataValidation\b([^>]*)>([\s\S]*?)<\/dataValidation>/g)].map(x=>{const attrs=x[1],inner=x[2];const sq=(attrs.match(/sqref="([^"]*)"/)||[])[1]||'';
         return {attrs:attrs.replace(/\s*sqref="[^"]*"/,''),inner:inner.replace(/<formula2>0<\/formula2>/,''),rects:sq.split(/\s+/).filter(Boolean).map(r=>({ref:r,b:rc(r)})).filter(r=>r.b)}});
@@ -1944,7 +1966,7 @@ async function fixXlsx(buf){
       const out='<dataValidations count="'+kept.length+'">'+kept.map(it=>'<dataValidation'+it.attrs+' sqref="'+it.rects.map(r=>r.ref).join(' ')+'">'+it.inner+'</dataValidation>').join('')+'</dataValidations>';
       xml=xml.replace(m[0],kept.length?out:'');zip.file(name,xml);
     }
-    if(!changed)return buf;console.log('데이터 유효성 겹침 '+changed+'건 정리');
+    if(!changed)return buf;console.log('xlsx 후처리 '+changed+'건 정리');
     return await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
   }catch(e){console.warn('xlsx 후처리 실패(원본 그대로 저장)',e);return buf}
 }
@@ -1972,12 +1994,13 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
       const dropped=before-wb.definedNames.model.length;if(dropped)console.log('정의된 이름 '+dropped+'개 제거(외부 참조·깨진 범위)');
     }catch(e){console.warn('definedNames 정리 실패',e)}
     try{                                                   // 원본 시트의 조건부 서식 중 ExcelJS가 내용을 잃는 확장(x14) 유형(containsText 등)은 깨진 채 저장되어 Excel 복구 메시지를 유발 → 제거
-      const KEEP=new Set(['cellIs','expression','colorScale','top10','aboveAverage','duplicateValues','uniqueValues']);let cut=0;
+      const KEEP=new Set(['cellIs','expression','colorScale','top10','aboveAverage']);let cut=0;   // duplicateValues 등은 ExcelJS가 빈 태그로 저장 → 제외
       wb.worksheets.forEach(w=>{const arr=w.conditionalFormattings;if(!arr||!arr.length)return;
         for(let i=arr.length-1;i>=0;i--){const cf=arr[i];const rules=(cf.rules||[]).filter(r=>KEEP.has(r.type)&&!(r.type==='expression'&&!(r.formulae&&r.formulae.length))&&!(r.type==='cellIs'&&!(r.formulae&&r.formulae.length)));
           cut+=(cf.rules||[]).length-rules.length;if(rules.length)cf.rules=rules;else arr.splice(i,1)}});
       if(cut)console.log('조건부 서식 규칙 '+cut+'개 제거(저장 시 깨지는 유형)');
     }catch(e){console.warn('conditionalFormattings 정리 실패',e)}}
+  wb.creator='Hong Doo-Pyo';wb.lastModifiedBy='Hong Doo-Pyo';   // 문서 속성: 만든 이
   const RCMS=useOrig?qs(SHEET_NAME):qs('RCM');
   const rcmRow=new Map();                     // 통제 → RCM 시트의 행번호
   const keyCol=MAP.controlCode!=null?colName(MAP.controlCode):null;
@@ -1988,6 +2011,15 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
   const dupsIn=(row,txt,skip)=>{let d=0;for(let k=0;k<NCOL;k++){if(k!==skip&&clean((GRID[row]||[])[k])===txt)d++}return d};
   const rowAt=delta=>'INDEX('+ALL+','+RS+'!$C$2'+(delta?(delta>0?'+':'')+delta:'')+',0)';        // 헤더 행(키 기준) + 오프셋 → 그 행 전체
   const mt=(cellRef,rowExpr)=>'IFERROR(MATCH('+cellRef+','+rowExpr+',0),MATCH(TRIM(CLEAN('+cellRef+'))&"*",'+rowExpr+',0))';   // 정확히 → 앞부분 일치(뒤 공백·줄바꿈 무시)
+  const grpFx=(c,h)=>{                          // 열 번호 수식 생성기(셀 참조 → 수식): 제목이 유일하면 이름으로, 같은 이름이 여러 곳이면 위쪽 그룹 제목 범위 안에서 찾음
+    if(!h.leaf)return {fx:null,note:''};const row=h.leafRow,delta=row-HDR;
+    if(!dupsIn(row,h.leaf,c))return {fx:ref=>mt(ref,rowAt(delta)),note:'헤더 이름으로 찾음'};
+    for(const pr of [HDR,HDR-1,HDR-2,HDR-3].filter(r=>r>=0&&r<row)){
+      let g=c;while(g>=0&&clean((GRID[pr]||[])[g])==='')g--;const ptxt=g>=0?clean(GRID[pr][g]):'';
+      if(ptxt&&ptxt!==h.leaf&&!dupsIn(pr,ptxt,g)&&c-g<30){const pd=pr-HDR;
+        return {fx:ref=>{const G=mt(xlStr(ptxt),rowAt(pd));const R=rowAt(delta);return mt(ref,'INDEX('+R+',1,'+G+'):INDEX('+R+',1,'+G+'+29)')+'+'+G+'-1'},note:'그룹 「'+ptxt.replace(/\n/g,' ')+'」 안에서 찾음'}}}
+    return {fx:null,note:'같은 이름이 여러 곳 — 열 번호 고정'};
+  };
   const ensureRef=()=>{
     if(rsSheet||MAP.controlCode==null)return rsSheet;
     dropSheet('RCM참조');rsSheet=wb.addWorksheet('RCM참조');const rs=rsSheet;
@@ -2000,7 +2032,7 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
     for(let r=1;r<=60;r++){const k=rs.getCell(r,11);k.value={formula:'IF(COUNTIF(INDEX('+ALL+','+r+',0),TRIM(CLEAN($D$2))&"*")>0,1,0)',result:r===kh.leafRow+1?1:0};k.font={name:'맑은 고딕',size:8,color:{argb:'FFBBBBBB'}}}   // K열: 행별 키 헤더 존재 여부(오류 셀 무시)
     rs.getCell('K1').note='행별 키 헤더 탐지(자동)';rs.getColumn(11).width=4;
     rs.getCell('C2').value=uniqKey?{formula:'IFERROR(MATCH(1,$K$1:$K$60,0),'+(HDR+1)+')'+(kDelta?(kDelta>0?'-':'+')+Math.abs(kDelta):''),result:HDR+1}:HDR+1;
-    l(3,'키(통제 ID) 열',{formula:mt('D2',rowAt(kDelta)),result:MAP.controlCode+1},kh.leaf,'통제 ID 열 번호');
+    {const kg=grpFx(MAP.controlCode,kh);l(3,'키(통제 ID) 열',kg.fx?{formula:kg.fx('D2'),result:MAP.controlCode+1}:MAP.controlCode+1,kh.leaf,'통제 ID 열 번호 · '+kg.note+' · 원래 '+colName(MAP.controlCode)+'열')}
     rs.getCell('D3').value={formula:'D2',result:kh.leaf};
     ['항목','열 번호','헤더 이름(수정 가능)','비고'].forEach((h,i)=>{const c=rs.getCell(4,2+i);c.value=h;styleLabel(c);c.alignment={horizontal:'center'}});
     [30,10,34,40].forEach((w,i)=>rs.getColumn(2+i).width=w);rs.getColumn(1).width=3;
@@ -2009,15 +2041,7 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
   const hdrRef=c=>{                             // 항목 열 번호 셀 참조 (RCM참조 시트) — 없으면 null
     if(c==null)return null;if(c in hdrCache)return hdrCache[c];
     const rs=ensureRef();if(!rs){hdrCache[c]=null;return null}
-    const h=headText(c);let colFx=null,note='';
-    if(h.leaf){const row=h.leafRow,delta=row-HDR;
-      if(!dupsIn(row,h.leaf,c)){colFx=rid=>mt('D'+rid,rowAt(delta));note='헤더 이름으로 찾음'}
-      else{for(const pr of [HDR,HDR-1,HDR-2].filter(r=>r>=0&&r!==row)){
-          let g=c;while(g>=0&&clean((GRID[pr]||[])[g])==='')g--;const ptxt=g>=0?clean(GRID[pr][g]):'';
-          if(ptxt&&ptxt!==h.leaf&&!dupsIn(pr,ptxt,g)&&c-g<30){const pd=pr-HDR;
-            colFx=rid=>{const G=mt(xlStr(ptxt),rowAt(pd));const R=rowAt(delta);return mt('D'+rid,'INDEX('+R+',1,'+G+'):INDEX('+R+',1,'+G+'+29)')+'+'+G+'-1'};
-            note='그룹 「'+ptxt+'」 안에서 찾음';break}}}
-      if(!colFx)note='같은 이름이 여러 곳 — 열 번호 고정'}
+    const h=headText(c);const gq=grpFx(c,h);const colFx=gq.fx?rid=>gq.fx('D'+rid):null,note=gq.note;
     const rid=rsRow++;const f=FIELDS.find(v=>MAP[v.key]===c);
     const A=rs.getCell(rid,2);A.value=f?labelOf(f):colName(c);styleLabel(A);
     const Bc=rs.getCell(rid,3);Bc.value=colFx?{formula:colFx(rid),result:c+1}:c+1;styleVal(Bc);
