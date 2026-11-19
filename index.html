@@ -126,7 +126,7 @@
     <button id="saveProjTop" title="매핑·문구·증빙·설계평가·운영평가 설정(차수·기준표·휴일·열 정의·통제별 지정)까지 전부 JSON으로 저장">작업 저장</button>
     <button class="ghost" id="loadProjTop">불러오기</button>
     <span class="samp" id="saveStat" style="max-width:none"></span>
-    <div class="stage">v4.8</div>
+    <div class="stage">v4.9</div>
   </div>
 </header>
 
@@ -1175,9 +1175,11 @@ function addImages(o,files){
       const img=new Image();
       img.onload=()=>{
         const w=img.naturalWidth,hh=img.naturalHeight;
-        o.evidence.push({type:'image',dataUrl:ev.target.result,w,h:hh,name:f.name||'캡쳐',caption:'',
-          scale:Math.min(100,Math.round(MAX_IMG_W/w*100))});
-        renderSheet();syncIdx();
+        const it={type:'image',dataUrl:ev.target.result,w,h:hh,name:f.name||'캡쳐',caption:'',
+          scale:Math.min(100,Math.round(MAX_IMG_W/w*100))};
+        const kb0=Math.round(it.dataUrl.length/1024);
+        shrinkImg(it).then(did=>{o.evidence.push(it);renderSheet();syncIdx();
+          if(did)STAT('붙여넣은 이미지 축소 '+kb0+'KB → '+Math.round(it.dataUrl.length/1024)+'KB ('+w+'×'+hh+' → '+it.w+'×'+it.h+')',100)});
       };
       img.src=ev.target.result;
     };
@@ -1476,6 +1478,79 @@ document.getElementById('holidayBtn').onclick=()=>{const b=document.getElementBy
 ['hmodeList','hmodeWeekend'].forEach(id=>document.getElementById(id).onchange=e=>{TOE.holidayMode=e.target.value;Object.keys(TOE.periodic||{}).forEach(k=>{if(!TOE.periodic[k].manual)delete TOE.periodic[k]});renderTOE()});
 document.getElementById('holidayTxt').onchange=e=>{TOE.holidays=e.target.value;Object.keys(TOE.periodic||{}).forEach(k=>{if(!TOE.periodic[k].manual)delete TOE.periodic[k]});renderTOE()};
 document.getElementById('holidayDefault').onclick=()=>{delete TOE.holidays;holidayTxt.value=DEF_HOLIDAYS;renderTOE()};
+/* 상태바: 진행 중인 과정과 % (화면 하단) */
+let ST_T=null;
+function STAT(msg,pct){let b=document.getElementById('stbar');
+  if(!b){b=document.createElement('div');b.id='stbar';b.title='진행 중인 작업과 진행률';
+    b.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1f2a33;color:#fff;font:12px 'Malgun Gothic',sans-serif;padding:5px 12px;display:none;align-items:center;gap:10px";
+    b.innerHTML='<span id="stmsg" style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span><span style="width:200px;height:8px;background:#46525c;border-radius:4px;overflow:hidden"><span id="stfill" style="display:block;height:100%;width:0;background:#4caf7d;transition:width .2s"></span></span><span id="stpct" style="width:38px;text-align:right">0%</span>';
+    document.body.appendChild(b)}
+  clearTimeout(ST_T);b.style.display='flex';
+  document.getElementById('stmsg').textContent=msg;const v=Math.max(0,Math.min(100,Math.round(pct)));
+  document.getElementById('stfill').style.width=v+'%';document.getElementById('stpct').textContent=v+'%';
+  if(v>=100)ST_T=setTimeout(()=>{b.style.display='none'},5000)}
+const tick=()=>new Promise(r=>setTimeout(r,0));
+/* 원본 RCM 사전 정리: 외부 파일 연결·깨진/대용량 이름 정의는 ExcelJS가 셀 단위로 펼쳐 메모리가 폭주(브라우저 꺼짐) → 열기 전에 제거 */
+let CLEAN_CACHE={src:null,out:null,note:''};
+async function preCleanXlsx(buf){
+  if(CLEAN_CACHE.src===buf)return CLEAN_CACHE.out;
+  const unesc=t=>String(t).replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+  const zip=await JSZip.loadAsync(buf);const wf=zip.file('xl/workbook.xml');if(!wf)return buf;
+  let wbx=await wf.async('string');const n0=wbx.length;
+  const sh={};
+  const rf=zip.file('xl/_rels/workbook.xml.rels'),rels=rf?await rf.async('string'):'';
+  for(const m of wbx.matchAll(/<sheet\b[^>]*>/g)){const t=m[0];const nm=(/name="([^"]*)"/.exec(t)||[])[1];const rid=(/r:id="([^"]*)"/.exec(t)||[])[1];if(nm==null)continue;
+    let last=1048576;
+    const rel=(rels.match(/<Relationship\b[^>]*>/g)||[]).find(x=>x.includes('Id="'+rid+'"'));const tg=rel&&(/Target="([^"]+)"/.exec(rel)||[])[1];
+    if(tg){const pth=tg.replace(/^\//,'').replace(/^(?!xl\/)/,'xl/');const f=zip.file(pth);if(f){const head=(await f.async('string')).slice(0,4000);const d=/<dimension ref="[^"]*?(\d+)"/.exec(head);if(d)last=Math.max(+d[1],1)}}
+    sh[unesc(nm).toLowerCase()]=last}
+  let drop=0,clip=0;
+  wbx=wbx.replace(/<definedName\b([^>]*)>([^<]*)<\/definedName>/g,(all,a,v)=>{
+    const nm=unesc((/name="([^"]*)"/.exec(a)||[])[1]||''),val=unesc(v);
+    if(/\[|#REF|\{/.test(val)||(/hidden="1"/.test(a)&&!/^_xlnm\./i.test(nm))){drop++;return ''}
+    let ok=true,area=0;
+    const out=val.split(',').map(pt0=>{const pt=pt0.trim();const m=/^(?:'((?:[^']|'')+)'|([^'!]+))!(.+)$/.exec(pt);if(!m){ok=false;return pt}
+      const sn=(m[1]||m[2]).replace(/''/g,"'").toLowerCase();if(!(sn in sh)){ok=false;return pt}
+      let rg=m[3];const cc=/^\$?([A-Z]{1,3}):\$?([A-Z]{1,3})$/.exec(rg);
+      if(cc&&!/^_xlnm\.Print/i.test(nm)){rg='$'+cc[1]+'$1:$'+cc[2]+'$'+sh[sn];clip++}          // 열 전체($M:$AU) → 사용 행까지
+      const r=/^\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?$/.exec(rg);
+      if(r){const ci=x=>x.split('').reduce((q,ch)=>q*26+ch.charCodeAt(0)-64,0);area+=(Math.abs(ci(r[3]||r[1])-ci(r[1]))+1)*(Math.abs((+r[4]||+r[2])-(+r[2]))+1)}
+      return pt.slice(0,pt.length-m[3].length)+rg});
+    if(!ok||area>300000){drop++;return ''}
+    return '<definedName'+a+'>'+out.join(',').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</definedName>'});
+  wbx=wbx.replace(/<definedNames>\s*<\/definedNames>/,'').replace(/<definedNames\/>/,'');
+  const ext=Object.keys(zip.files).filter(k=>/^xl\/externalLinks\//i.test(k));
+  if(ext.length){wbx=wbx.replace(/<externalReferences>[\s\S]*?<\/externalReferences>/,'');ext.forEach(k=>zip.remove(k));
+    if(rels)zip.file('xl/_rels/workbook.xml.rels',rels.replace(/<Relationship\b[^>]*externalLink[^>]*\/>/g,''));
+    const ct=zip.file('[Content_Types].xml');if(ct)zip.file('[Content_Types].xml',(await ct.async('string')).replace(/<Override\b[^>]*externalLinks[^>]*\/>/g,''))}
+  let out=buf;
+  if(wbx.length!==n0||ext.length){zip.file('xl/workbook.xml',wbx);out=await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'})}
+  const nExt=ext.filter(k=>/externalLink\d+\.xml$/i.test(k)).length;
+  CLEAN_CACHE={src:buf,out,note:(drop||nExt||clip)?('원본 정리: 이름 정의 '+drop+'개·외부 연결 '+nExt+'개 제거'+(clip?' · 열 전체 이름 '+clip+'개 범위 축소':'')):''};
+  if(CLEAN_CACHE.note)console.log(CLEAN_CACHE.note);
+  return out;
+}
+/* 증빙 이미지 축소: 긴 변 6000px·1천만 화소 이하, 1.5MB 넘으면 JPEG(85%) — 엑셀에 보이는 크기는 그대로 */
+const IMG_MAXL=6000,IMG_MAXA=10e6,IMG_MAXB=1.5e6;
+const needShrink=it=>!!(it&&it.type==='image'&&it.dataUrl&&(Math.max(it.w,it.h)>IMG_MAXL||it.w*it.h>IMG_MAXA||it.dataUrl.length>IMG_MAXB));
+function shrinkImg(it){return new Promise(res=>{
+  if(!needShrink(it)){res(false);return}
+  let done=false;const fin=v=>{if(!done){done=true;res(v)}};setTimeout(()=>fin(false),30000);   // 30초 안에 못 그리면 원본 유지
+  const img=new Image();img.onerror=()=>fin(false);
+  img.onload=()=>{try{const w=img.naturalWidth||it.w,h=img.naturalHeight||it.h;
+    const k=Math.min(1,IMG_MAXL/Math.max(w,h),Math.sqrt(IMG_MAXA/(w*h)));const nw=Math.max(1,Math.round(w*k)),nh=Math.max(1,Math.round(h*k));
+    const cv=document.createElement('canvas');cv.width=nw;cv.height=nh;const g=cv.getContext('2d');
+    g.fillStyle='#fff';g.fillRect(0,0,nw,nh);g.imageSmoothingQuality='high';g.drawImage(img,0,0,nw,nh);
+    const u=cv.toDataURL('image/jpeg',0.85);
+    if(!done&&u&&u.length<it.dataUrl.length){it.scale=Math.max(1,Math.min(400,Math.round((it.scale||100)*w/nw)));it.w=nw;it.h=nh;it.dataUrl=u;fin(true)}else fin(false)}
+    catch(e){console.warn('이미지 축소 실패',e);fin(false)}};
+  img.src=it.dataUrl})}
+const evBytes=()=>PROCS.reduce((a,p)=>a+p.ctrls.reduce((b,c)=>b+(c.evidence||[]).reduce((x,e)=>x+(e.dataUrl?e.dataUrl.length:0),0),0),0);
+async function shrinkAll(why){
+  const list=[];PROCS.forEach(p=>p.ctrls.forEach(c=>(c.evidence||[]).forEach(e=>{if(needShrink(e))list.push(e)})));
+  if(!list.length)return 0;const b0=evBytes();let n=0;
+  for(let i=0;i<list.length;i++){STAT((why||'증빙 이미지 용량 줄이는 중')+' ('+(i+1)+'/'+list.length+')',i/list.length*100);await tick();if(await shrinkImg(list[i]))n++}
+  STAT('증빙 이미지 '+n+'장 축소: '+Math.round(b0/1048576)+'MB → '+Math.round(evBytes()/1048576)+'MB',100);return n}
 let CARRY=null;
 document.getElementById('carryBtn').onclick=()=>document.getElementById('carryFile').click();
 document.getElementById('carryFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async ev=>{try{await loadCarryFile(ev.target.result,f.name)}catch(err){console.error(err);alert('파일을 읽지 못했습니다: '+err.message)}};r.readAsArrayBuffer(f);e.target.value=''};
@@ -1753,7 +1828,7 @@ document.getElementById('reqExportAll').onclick=async()=>{
   }));
   [5,14,16,26,52,12,10,11,10,13,40,48,22,10,11].forEach((w,i)=>rq.getColumn(2+i).width=w);rq.getColumn(1).width=3;
   if(n)rq.autoFilter={from:{row:5,column:2},to:{row:5+n,column:1+RH.length}};
-  const buf=await fixXlsx(await wb.xlsx.writeBuffer());
+  STAT('엑셀 파일 쓰는 중',75);await tick();const buf=await fixXlsx(await wb.xlsx.writeBuffer());STAT('파일 저장 중',95);
   const nm=fmtFileName({code:'요청증빙',name:''}).replace(/설계평가_/,'');
   dl(nm,new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
 };
@@ -1828,7 +1903,11 @@ document.getElementById('loadProj').onchange=e=>{
     document.getElementById('loadmsg').innerHTML='<div class="msg ok">작업을 복원했습니다 · 통제 '+
       PROCS.reduce((n,p)=>n+p.ctrls.length,0)+'건. RCM이 바뀐 경우 새 RCM 파일을 올린 뒤 <b>RCM 반영</b>을 누르세요.</div>';
     afterBuild();
+    if(PROCS.some(p=>p.ctrls.some(c=>(c.evidence||[]).some(needShrink))))   // 예전 작업파일의 큰 이미지 → 자동 축소(엑셀 보이는 크기는 유지)
+      shrinkAll('작업파일의 큰 증빙 이미지 축소 중').then(n=>{if(n){try{renderSheet()}catch(e){}
+        document.getElementById('loadmsg').insertAdjacentHTML('beforeend','<div class="msg ok">큰 증빙 이미지 '+n+'장을 자동으로 줄였습니다(엑셀에 보이는 크기는 같음). <b>작업 저장</b>을 한 번 다시 해 두세요.</div>')}});
   }catch(err){alert('작업 파일을 읽지 못했습니다: '+err.message)}};
+  STAT('작업 파일 읽는 중',30);r.onprogress=ev=>{if(ev.lengthComputable)STAT('작업 파일 읽는 중',ev.loaded/ev.total*90)};
   r.readAsText(f);
 };
 
@@ -1880,8 +1959,9 @@ document.getElementById('fxmode').onchange=e=>{FX_MODE=e.target.value;setFxHelp(
 document.getElementById('fxtext').onchange=e=>{FX_TEXT=e.target.checked};
 setFxHelp();
 async function safeExport(p,m){
-  try{if(!PROCS.some(x=>x.ctrls.some(o=>o._sheet)))assignSheetNames();await exportProc(p);return true}
-  catch(err){console.error(err);const msg='내보내기 실패 ['+p.code+']: '+(err&&err.message?err.message:err);if(m)m.innerHTML='<span class="badge b-bad">'+esc(msg)+'</span>';alert(msg+'\n\n매핑(특히 통제활동 코드 열)과 RCM 시트명을 확인해 주세요.');return false}
+  try{if(!PROCS.some(x=>x.ctrls.some(o=>o._sheet)))assignSheetNames();
+    await shrinkAll('내보내기 전 큰 이미지 축소 중');STAT('['+p.code+'] 엑셀 만드는 중',5);await tick();await exportProc(p);STAT('['+p.code+'] 저장 완료',100);return true}
+  catch(err){console.error(err);STAT('내보내기 실패 ['+p.code+']',100);const msg='내보내기 실패 ['+p.code+']: '+(err&&err.message?err.message:err);if(m)m.innerHTML='<span class="badge b-bad">'+esc(msg)+'</span>';alert(msg+'\n\n매핑(특히 통제활동 코드 열)과 RCM 시트명을 확인해 주세요.');return false}
 }
 document.getElementById('expAll').onclick=async()=>{
   const m=document.getElementById('expmsg');let ok=0;
@@ -1984,7 +2064,7 @@ const hlink=(sheet,text)=>({formula:'HYPERLINK("#'+qs(sheet).replace(/"/g,'""')+
 async function openBook(p){                   // RCM 시트 준비 + 수식 헬퍼 (설계평가·운영평가 공용)
   const useOrig=RCM_MODE!=='rebuild'&&RAW_BUF&&RAW_XLSX;
   const wb=new ExcelJS.Workbook();
-  if(useOrig){try{await wb.xlsx.load(RAW_BUF)}catch(err){alert('원본 파일을 열지 못해 새로 그리기 방식으로 내보냅니다: '+err.message);await exportProcRebuild(p);return null}
+  if(useOrig){try{STAT('원본 RCM 정리 중',8);await tick();const cb=await preCleanXlsx(RAW_BUF);STAT('원본 RCM 여는 중'+(CLEAN_CACHE.note?' · '+CLEAN_CACHE.note:''),20);await tick();await wb.xlsx.load(cb)}catch(err){alert('원본 파일을 열지 못해 새로 그리기 방식으로 내보냅니다: '+err.message);await exportProcRebuild(p);return null}
     try{                                                   // 원본의 정의된 이름 중 외부 참조·시트 없는 범위 등 깨진 것 제거 (Excel 복구 메시지 원인)
       const sheetsLC=new Set(wb.worksheets.map(w=>w.name.toLowerCase()));
       const okRange=r=>{const m=String(r).match(/^(?:'((?:[^']|'')+)'|([^'!\[\]"]+))!(\$?[A-Z]{1,3}\$?\d{1,7}(?::\$?[A-Z]{1,3}\$?\d{1,7})?|\$?[A-Z]{1,3}:\$?[A-Z]{1,3}|\$?\d{1,7}:\$?\d{1,7})$/);
@@ -2121,7 +2201,7 @@ async function openBook(p){                   // RCM 시트 준비 + 수식 헬�
 }
 async function finishBook(p,wb,useOrig){
   if(useOrig){const ws=wb.getWorksheet(SHEET_NAME);if(ws)wb.views=[{firstSheet:0,activeTab:wb.worksheets.indexOf(ws)}]}
-  const buf=await fixXlsx(await wb.xlsx.writeBuffer());
+  STAT('엑셀 파일 쓰는 중',75);await tick();const buf=await fixXlsx(await wb.xlsx.writeBuffer());STAT('파일 저장 중',95);
   dl(fileNameOf(p),new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
 }
 function writeReqSheet(wb,p,fx){
